@@ -4,7 +4,9 @@
    ===================================================================== */
 (function () {
   "use strict";
-  const CFG = window.BOOK_CONFIG, UNITS = window.BOOK_UNITS, MEDIA = window.BOOK_MEDIA || [], LINKS = window.BOOK_LINKS || {};
+  const CFG = window.BOOK_CONFIG, UNITS = window.BOOK_UNITS, MEDIA = window.BOOK_MEDIA || [], LINKS = window.BOOK_LINKS || {}, MINIS = window.BOOK_MINIS || [];
+  const CARD = { clue: "3.2 · Try CLUE", clue2: "3.3 · Try it first: only one is chosen", prep: "4.2 · Build the PREP", speak: "4.4 · Speak now", scan: "5.2 · Find the evidence", peel: "6.3 · Build a PEEL paragraph", self: "1.6 · Where am I now?", c34: "3.4 · Catch the clue", c35: "3.5 · Spot the trap: word-match", p43: "4.3 · Try it first: build the PREP", p45: "4.5 · Spot the trap: script-reader freeze", s53: "5.3 · Try it first: find it, then confirm it", s54: "5.4 · Find the evidence" };
+
   const N = CFG.totalPages;
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -24,12 +26,13 @@
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
   /* ---------------- saved progress ---------------- */
-  let state = { units: {}, last: 0, sound: true, hinted: false, name: "", goal: "", skipped: false, marks: [], streak: { day: "", n: 0 } };
+  let state = { units: {}, last: 0, sound: true, hinted: false, name: "", goal: "", skipped: false, marks: [], streak: { day: "", n: 0 }, drafts: {}, mini: {}, free: false };
   try { Object.assign(state, JSON.parse(localStorage.getItem(CFG.STORAGE_KEY) || "{}")); } catch (e) {}
   const save = () => { try { localStorage.setItem(CFG.STORAGE_KEY, JSON.stringify(state)); } catch (e) {} };
   const isComplete = u => !!(state.units[u.id] && state.units[u.id].complete);
   const unitScore = u => state.units[u.id] && state.units[u.id].best;
   const firstIncomplete = () => UNITS.find(u => !isComplete(u));
+  const guided = () => CFG.REQUIRE_COMPLETE && !state.free;
   const nm = () => (state.name || "").trim();
   const you = (pre = "", post = "") => nm() ? pre + nm() + post : "";
   const pick = a => a[Math.floor(Math.random() * a.length)];
@@ -89,7 +92,7 @@
 
   /* ---------------- navigation with unit gating ---------------- */
   function gate(targetIdx) {          // returns the unit that blocks, or null
-    if (!CFG.REQUIRE_COMPLETE) return null;
+    if (!guided()) return null;
     const u = firstIncomplete();
     if (u && leftOf(targetIdx) > u.end - 1) return u;
     return null;
@@ -128,7 +131,7 @@
   $("#slider").addEventListener("input", e => { $("#pageLbl").textContent = "Page " + e.target.value; });
   $("#slider").addEventListener("change", e => goTo(+e.target.value));
   document.addEventListener("keydown", e => {
-    if (!$("#modal").hidden || !$("#mediaModal").hidden) { if (e.key === "Escape") { closeModal(); closeMedia(); } return; }
+    if (!$("#modal").hidden || !$("#mediaModal").hidden || !$("#miniModal").hidden) { if (e.key === "Escape") { closeModal(); closeMedia(); closeMini(); } return; }
     if (/INPUT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== "range") return;
     if (e.key === "ArrowRight") step(1);
     if (e.key === "ArrowLeft") step(-1);
@@ -148,7 +151,7 @@
     // checkpoint auto-prompt (once per unit per visit)
     const vis = visible(cur);
     const u = UNITS.find(x => vis.includes(x.end - 1));
-    if (u && !isComplete(u) && lastPrompted !== u.id) { lastPrompted = u.id; setTimeout(() => { if (modalClosed()) openUnit(u); }, 900); }
+    if (u && guided() && !isComplete(u) && lastPrompted !== u.id) { lastPrompted = u.id; setTimeout(() => { if (modalClosed()) openUnit(u); }, 900); }
   }
   pf.on("flip", onFlip);
   pf.on("changeOrientation", () => { refresh(); });
@@ -165,10 +168,11 @@
     $("#slider").value = v[0] + 1;
     $("#btnPrev").disabled = cur === 0;
     $("#btnNext").disabled = v.includes(N - 1);
+    pageEls.forEach((pe, i) => pe.classList.toggle("vis", v.includes(i)));
     $("#btnNext2").disabled = v.includes(N - 1); $("#btnPrev2").disabled = cur === 0;
     $("#pageIn").value = v[0] + 1; $("#pgTot").textContent = "/ " + N;
     const mk = $("#btnMark"); const marked = v.some(x => state.marks.includes(x + 1)); mk.textContent = marked ? "⭐" : "☆"; mk.classList.toggle("on", marked);
-    renderStrip(); markStrip(v.map(x => x + 1));
+    renderStrip(); markStrip(v.map(x => x + 1)); if (typeof refreshMinis === 'function') refreshMinis();
     const done = UNITS.filter(isComplete).length;
     $("#progTxt").textContent = `${done} / ${UNITS.length} units`;
     $("#progBar").style.width = (done / UNITS.length * 100) + "%";
@@ -187,6 +191,7 @@
     const a = e.target.closest(".hot"); if (!a) return;
     e.preventDefault();
     const now = Date.now(); if (now - lastClick < 350) return; lastClick = now;
+    if (a.dataset.mini) return openMini(MINIS.find(x => x.id === a.dataset.mini));
     if (a.dataset.media != null) return playMedia(MEDIA[+a.dataset.media], a);
     if (a.dataset.page) return goTo(+a.dataset.page);
     const url = a.dataset.url || "";
@@ -239,7 +244,7 @@
     box.append(h("div", { class: "toc-sec" }, "Units + checkpoints"));
     UNITS.forEach(u => {
       const sc = unitScore(u), isCur = cur.some(p => p >= u.from && p <= u.end);
-      const locked = CFG.REQUIRE_COMPLETE && first && u.id > first.id;
+      const locked = guided() && first && u.id > first.id;
       const st = isComplete(u) ? h("span", { class: "toc-st ok" }, Math.round(sc.score / sc.total * 100) + "%")
         : locked ? h("span", { class: "toc-st lock" }, "🔒") : h("span", { class: "toc-st todo" }, "To do");
       const card = h("div", { class: "unit-card" + (isCur ? " cur" : "") + (isComplete(u) ? " done" : "") },
@@ -249,6 +254,9 @@
         h("button", { class: "link", onclick: () => { closeDrawer(); openUnit(u); } }, isComplete(u) ? "Review checkpoint →" : "Open checkpoint →"));
       box.append(card);
     });
+    box.append(h("div", { class: "modebox" }, h("b", {}, "Reading mode"),
+      h("div", { class: "chips light" }, [["guided", "Guided"], ["free", "Free"]].map(([k, l]) => h("button", { class: (state.free ? "free" : "guided") === k ? "on" : "", onclick: () => { state.free = k === "free"; save(); refresh(); toast(k === "free" ? "Free mode: read any page. Checkpoints are optional." : "Guided mode: finish each checkpoint to unlock the next unit."); } }, l))),
+      h("small", {}, state.free ? "Read any page in any order. Checkpoints stay optional." : "Checkpoints unlock the next unit.")));
     $("#btnCert").hidden = !UNITS.every(isComplete);
   }
   function renderThumbs() {
@@ -280,7 +288,7 @@
           h("img", { src: thumbSrc(i), alt: "", loading: "lazy", draggable: "false" }), h("em", {}, i), u ? h("i", { class: "flag" }, "🏁") : null));
       }
     }
-    $$(".st", box).forEach(b => { const p = +b.dataset.p; b.classList.toggle("lock", !!(CFG.REQUIRE_COMPLETE && first && p > first.end)); });
+    $$(".st", box).forEach(b => { const p = +b.dataset.p; b.classList.toggle("lock", !!(guided() && first && p > first.end)); });
   }
   function markStrip(pages) {
     const box = $("#strip"); let cur = null;
@@ -306,7 +314,7 @@
     if (autoT) return stopAuto("Auto-flip stopped.");
     const b = $("#btnPlay"); b.textContent = "⏸"; b.classList.add("on"); toast("Auto-flip on. Tap ⏸ to pause.", 2200);
     autoT = setInterval(() => {
-      if (!modal.hidden || !$("#mediaModal").hidden || speaking) return;
+      if (!modal.hidden || !$("#mediaModal").hidden || !$("#miniModal").hidden || speaking) return;
       const cur = pf.getCurrentPageIndex();
       if (visible(cur).includes(N - 1)) return stopAuto("You reached the end 🎉");
       if (gate(portrait() ? cur + 1 : cur + (cur === 0 ? 1 : 2))) return stopAuto("Auto-flip paused at your checkpoint.");
@@ -324,7 +332,7 @@
 
   /* ---------------- search ---------------- */
   const KEYS = [
-    ["PREP", "Speaking technique: Point, Reason, Example, Point", 24], ["PEEL", "Writing technique: Point, Evidence, Explain, Link", 38],
+    ["PREP", "Speaking technique: Point, Reason, Example, Point", 24], ["PEEL", "Writing technique: Point, Explain, Example, Link", 38],
     ["SCAN", "Reading technique for finding answers fast", 31], ["CLUE", "Listening technique", 17],
     ["Band", "How MUET bands and scores work", 8], ["Exam slip", "Check your MUET exam slip online", 13], ["Results", "Check your MUET result", 13],
     ["Registration", "How to register for MUET", 13], ["Fees", "MUET test fees (kadar bayaran)", 13], ["Calendar", "MUET 2027 calendar and dates", 12],
@@ -407,19 +415,21 @@
   $("#btnName").onclick = () => { closeDrawer(); showWelcome(true); };
 
   /* ---------------- welcome (personal touch) ---------------- */
-  let wGoal = state.goal || "";
+  let wGoal = state.goal || "", wMode = state.free ? "free" : "guided";
   function paintGreet() { $("#greet").textContent = nm() ? `Hi ${nm()} 👋 · Band Up! 2027` : "Band Up! 2027 · Interactive eBook"; }
   function showWelcome(edit) {
     $("#welcome").hidden = false; $("#wName").value = nm(); wGoal = state.goal || "";
     $$("#wGoal button").forEach(b => b.classList.toggle("on", b.dataset.g === wGoal));
+    wMode = state.free ? "free" : "guided"; $$("#wMode button").forEach(b => b.classList.toggle("on", b.dataset.m === wMode));
     $("#wGo").textContent = edit ? "Save ›" : "Open the book ›"; setTimeout(() => $("#wName").focus(), 300);
   }
   $$("#wGoal button").forEach(b => b.onclick = () => { wGoal = wGoal === b.dataset.g ? "" : b.dataset.g; $$("#wGoal button").forEach(x => x.classList.toggle("on", x.dataset.g === wGoal)); });
   function closeWelcome(save_) {
-    if (save_) { state.name = $("#wName").value.trim(); state.goal = wGoal; } else state.skipped = true;
+    if (save_) { state.name = $("#wName").value.trim(); state.goal = wGoal; state.free = wMode === "free"; } else state.skipped = true;
     save(); $("#welcome").hidden = true; paintGreet(); refresh();
     if (save_ && nm()) { toast(`Hello ${nm()}! Let’s get you to ${state.goal || "your best band"} 💪`, 3600); confetti(40); }
   }
+  $$("#wMode button").forEach(b => b.onclick = () => { wMode = b.dataset.m; $$("#wMode button").forEach(x => x.classList.toggle("on", x === b)); });
   $("#wGo").onclick = () => closeWelcome(true);
   $("#wSkip").onclick = () => closeWelcome(false);
   $("#wName").addEventListener("keydown", e => { if (e.key === "Enter") closeWelcome(true); });
@@ -523,18 +533,33 @@
   function closeModal() { modal.hidden = true; stopSpeak(); }
   modal.addEventListener("click", e => { if (e.target === modal && !(CFG.REQUIRE_COMPLETE && S && !isComplete(S.u) && false)) closeModal(); });
 
-  function newSession(u) {
+  const idxs = n => shuffle(Array.from({ length: n }, (_, i) => i));
+  function buildSession(u, sv) {
+    const P = sv ? sv.P : { mcq: idxs(u.mcq.length), tf: idxs(u.tf.length), fill: idxs(u.fill.length), right: idxs(u.match.pairs.length) };
+    const uu = Object.assign({}, u, { mcq: P.mcq.map(i => u.mcq[i]), tf: P.tf.map(i => u.tf[i]), fill: P.fill.map(i => u.fill[i]) });
+    if (!P.opts) P.opts = uu.mcq.map(q => idxs(q.options.length));
+    const g = k => (sv && sv[k]) || {};
     return {
-      u, tab: 0,
-      mcq: { order: u.mcq.map(q => shuffle(q.options.map((t, i) => ({ t, i })))), picked: [], done: false },
-      tf: { picked: [], done: false },
-      fill: { vals: [], res: [], done: false },
-      match: { right: shuffle(u.match.pairs.map((p, i) => i)), map: {}, sel: null, res: null, done: false }
+      u: uu, base: u, P, tab: sv ? sv.tab : 0,
+      mcq: { order: uu.mcq.map((q, qi) => P.opts[qi].map(i => ({ t: q.options[i], i }))), picked: g("mcq").picked || [], done: !!g("mcq").done },
+      tf: { picked: g("tf").picked || [], done: !!g("tf").done },
+      fill: { vals: g("fill").vals || [], res: g("fill").res || [], done: !!g("fill").done },
+      match: { right: P.right, map: g("match").map || {}, sel: null, res: g("match").res || null, done: !!g("match").done }
     };
   }
+  function saveDraft() {
+    if (!S || S.tab > 3) return;
+    state.drafts[S.u.id] = { P: S.P, tab: S.tab, mcq: { picked: S.mcq.picked, done: S.mcq.done }, tf: { picked: S.tf.picked, done: S.tf.done },
+      fill: { vals: S.fill.vals, res: S.fill.res, done: S.fill.done }, match: { map: S.match.map, res: S.match.res, done: S.match.done } };
+    save();
+  }
   function openUnit(u, force) {
-    if (!modal.hidden && S && S.u === u && !force) return;
-    stopSpeak(); S = newSession(u); modal.hidden = false; renderSheet();
+    if (!modal.hidden && S && S.u.id === u.id && !force) return;
+    stopSpeak();
+    const base = UNITS.find(x => x.id === u.id), sv = force ? null : state.drafts[u.id];
+    if (force) delete state.drafts[u.id];
+    S = buildSession(base, sv); modal.hidden = false; renderSheet();
+    if (sv) toast("Continuing where you left off 👍", 2200);
   }
   const scoreOf = (k) => {
     const u = S.u;
@@ -547,6 +572,7 @@
   const allDone = () => STEPS.every(s => S[s.key].done);
 
   function renderSheet() {
+    saveDraft();
     const u = S.u, onResult = S.tab === 4;
     sheet.textContent = "";
     sheet.append(h("div", { class: "mhead", style: "background:" + u.color },
@@ -624,7 +650,7 @@
       const parts = q.q.split("___");
       const inp = h("input", { type: "text", autocomplete: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "Answer " + (qi + 1), value: st.vals[qi] || "" });
       if (st.done) { inp.disabled = true; inp.classList.add(st.res[qi] ? "ok" : "bad"); }
-      inp.addEventListener("input", () => { st.vals[qi] = inp.value; });
+      inp.addEventListener("input", () => { st.vals[qi] = inp.value; saveDraft(); });
       inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); (inputs[qi + 1] || inp).focus(); } });
       inputs.push(inp);
       const card = h("div", { class: "q" }, h("div", { class: "qt fillq" }, h("i", {}, (qi + 1) + "."), parts[0], inp, parts[1] || ""));
@@ -681,6 +707,7 @@
   function renderResult(body, foot) {
     const u = S.u, [x, y] = totals(), p = Math.round(x / y * 100);
     const pass = p >= (CFG.PASS_PERCENT || 0);
+    delete state.drafts[u.id]; save();
     const prev = unitScore(u);
     if (pass) {
       const wasDone = isComplete(u);
@@ -694,14 +721,244 @@
     const [m, mt] = medal(p);
     body.append(h("div", { class: "result" },
       h("div", { class: "medal" }, pass ? m : "🔁"),
-      h("h3", {}, pass ? `${you("", ", ")}${p >= 90 ? "you nailed it" : p >= 70 ? "great job" : p >= 50 ? "good effort" : "nice try"}! ${mt} ${x} / ${y} (${p}%)` : `${x} / ${y} (${p}%) — you need ${CFG.PASS_PERCENT}% to unlock the next unit`),
+      h("h3", {}, pass ? `${you("", ", ")}${p >= 90 ? "you nailed it" : p >= 70 ? "great job" : p >= 50 ? "good effort" : "nice try"}! ${mt} ${x} / ${y} (${p}%)` : `${you("", ", ")}${p >= 40 ? "so close" : "not yet"}! ${x} / ${y} (${p}%). You need ${CFG.PASS_PERCENT}% to unlock the next unit.`),
       h("div", { class: "bk" }, STEPS.map(s => { const [a, b] = scoreOf(s.key); return h("div", {}, h("span", {}, s.icon + " " + s.label), h("span", {}, a + " / " + b)); })),
       UNITS.every(isComplete) ? h("button", { class: "btn go", style: "margin:6px auto 4px", onclick: certificate }, "🎓 Download my certificate") : null,
-      h("p", { class: "note" }, pass ? "Your best score is saved on this device. You can retry any time to improve it." : "Try again, and read the unit pages first if you need to.")));
+      h("p", { class: "note" }, pass ? "Your best score is saved on this device. You can retry any time to improve it." : "No stress. Read the unit pages again, then try once more. The questions come in a new order each time.")));
     foot.append(
+      !pass ? h("button", { class: "btn alt", onclick: () => { closeModal(); goTo(u.from); } }, `📖 Read pages ${u.from}–${u.end}`) : null,
       h("button", { class: "btn alt", onclick: () => { openUnit(u, true); } }, "↻ Try again"),
       h("button", { class: "btn go", disabled: !pass, onclick: () => { closeModal(); const cur = pf.getCurrentPageIndex(); if (visible(cur).includes(u.end - 1) && !visible(cur).includes(N - 1)) setTimeout(() => step(1), 250); } },
         u.id === UNITS.length ? "Finish ✔" : "Continue reading ›"));
+  }
+
+
+  /* =====================================================================
+     MINI ACTIVITIES on the pages  (Try → Explain → Check → Improve → Save)
+     ===================================================================== */
+  const miniModal = $("#miniModal"), msheet = $("#miniSheet");
+  let M = null, rec = null, planT = null;
+  const AUD = {
+    open() { return new Promise((res, rej) => { const r = indexedDB.open("smartMuetAudio", 1); r.onupgradeneeded = () => r.result.createObjectStore("a"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+    async put(k, v) { try { const d = await this.open(); return await new Promise(res => { const t = d.transaction("a", "readwrite"); t.objectStore("a").put(v, k); t.oncomplete = () => res(true); t.onerror = () => res(false); }); } catch (e) { return false; } }
+  };
+  const miniData = id => (state.mini[id] = state.mini[id] || { data: {} });
+  function refreshMinis() {
+    const dock = $("#miniDock"); if (!dock) return;
+    const cur = pf.getCurrentPageIndex(), v = visible(cur).map(x => x + 1);
+    dock.textContent = "";
+    MINIS.filter(m => v.includes(m.page)).forEach(m => {
+      const done = state.mini[m.id] && state.mini[m.id].done;
+      const b = h("button", { class: "mcard" + (done ? " done" : ""), type: "button", style: "--mc:" + m.color, onclick: () => openMini(m) },
+        h("span", { class: "mic" }, done ? "✓" : "▶"),
+        h("span", { class: "mtx" }, h("b", {}, (done ? "Done " : "Play ") + (CARD[m.id] || m.label)), h("small", {}, done ? "Tap to review or try again" : "Tap to answer and score")));
+      dock.append(b);
+    });
+  }
+  function freshSt(def) { const st = {}; if (def.type === "quiz") { st.ans = {}; st.mode = "practice"; st.played = 0; } return st; }
+  function openMini(def) {
+    stopSpeak(); const saved = (miniData(def.id).data) || {};
+    const sess = miniData(def.id).sess;
+    if (sess && def.type !== "speak") { M = { def, st: Object.assign(freshSt(def), JSON.parse(JSON.stringify(saved)), sess.st), checked: !!sess.checked, step: sess.step || 0, revise: !!sess.revise }; if (def.type === "quiz") M.st.played = 0; }
+    else { M = { def, st: Object.assign(freshSt(def), JSON.parse(JSON.stringify(saved))), checked: false, step: 0 }; if (def.type === "quiz") { M.st.ans = {}; M.st.played = 0; } }
+    miniModal.hidden = false; renderMini();
+  }
+  function closeMini() { stopRecording(); clearInterval(planT); miniModal.hidden = true; stopSpeak(); M = null; refreshMinis(); }
+  miniModal.addEventListener("click", e => { if (e.target === miniModal) closeMini(); });
+  function finishMini(extra) {
+    const d = miniData(M.def.id); d.done = true; d.at = Date.now();
+    const keep = Object.assign({}, M.st, extra || {}); delete keep.played; delete keep.urls; delete keep.ans; delete keep.qi; d.data = Object.assign(d.data || {}, keep, extra || {});
+    save(); refreshMinis();
+  }
+  function renderMini() {
+    const def = M.def; msheet.textContent = "";
+    msheet.append(h("div", { class: "mhead", style: "background:" + def.color }, h("span", { class: "em" }, def.icon),
+      h("div", {}, h("h2", {}, def.title), h("small", {}, "Try → Check → Improve → Save")),
+      h("button", { class: "x", onclick: closeMini, "aria-label": "Close" }, "✕")));
+    const body = h("div", { class: "mbody" }), foot = h("div", { class: "mfoot" });
+    msheet.append(body, foot);
+    ({ quiz: mQuiz, prep: mPrep, speak: mSpeak, peel: mPeel, self: mSelf })[def.type](body, foot);
+    saveSess();
+  }
+  function saveSess() {
+    if (!M || M.def.type === "speak") return;
+    const st = Object.assign({}, M.st); delete st.urls;
+    miniData(M.def.id).sess = JSON.parse(JSON.stringify({ st, step: M.step, checked: M.checked, revise: !!M.revise })); save();
+  }
+  function syncCheck(ok) {
+    const b = msheet.querySelector(".mfoot .btn"), l = msheet.querySelector(".mfoot .sc");
+    if (b && !M.checked) { b.disabled = !ok; if (l) l.textContent = ok ? "Ready to check" : "Finish the task to check"; }
+  }
+  function miniFoot(foot, canCheck, onCheck, label) {
+    const left = h("span", { class: "sc" }, M.checked ? "✓ Saved on this device" : (canCheck ? "Ready to check" : "Finish the task to check"));
+    const btns = h("div", { style: "display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end" });
+    if (!M.checked) btns.append(h("button", { class: "btn", disabled: !canCheck, onclick: onCheck }, label || "Check my answer"));
+    else btns.append(h("button", { class: "btn alt", onclick: () => { const dd = miniData(M.def.id); delete dd.sess; ["f", "v2", "si", "pi", "ticks", "qi"].forEach(k => delete dd.data[k]); M.st = freshSt(M.def); M.checked = false; M.step = 0; M.revise = false; renderMini(); } }, "↻ Try again"),
+      h("button", { class: "btn go", onclick: closeMini }, "Back to my page ›"));
+    foot.append(left, btns); return btns;
+  }
+  const wc = t => (String(t || "").trim().match(/\S+/g) || []).length;
+  const tick = (arr, st) => h("div", { class: "ticks" }, arr.map((t, i) => h("label", { class: "tick" }, h("input", { type: "checkbox", checked: !!(st.ticks && st.ticks[i]), onchange: e => { st.ticks = st.ticks || []; st.ticks[i] = e.target.checked; const d = miniData(M.def.id); d.data = Object.assign(d.data || {}, { ticks: st.ticks }); save(); } }), t)));
+  const autosave = (st, extra) => { const d = miniData(M.def.id); d.data = Object.assign(d.data || {}, extra); save(); };
+
+  function mQuiz(body, foot) {
+    const def = M.def, st = M.st;
+    body.append(h("p", { class: "intro" }, def.intro));
+    if (def.audio) {
+      body.append(h("div", { class: "chips light" }, [["practice", "Practice · replay any time"], ["challenge", "Challenge · play once"]].map(([k, l]) => h("button", { class: st.mode === k ? "on" : "", disabled: M.checked, onclick: () => { st.mode = k; st.played = 0; renderMini(); } }, l))));
+      const once = st.mode === "challenge" && st.played >= 1;
+      body.append(h("button", { class: "say", type: "button", disabled: once && !speaking, onclick: e => { st.played++; speak(def.audio, 1, e.currentTarget); } }, once ? "🔊 Played once" : "🔊 Play dialogue"));
+      if (!("speechSynthesis" in window)) body.append(h("p", { class: "note" }, "This browser cannot read aloud. Open the transcript after you try."));
+    }
+    const lines = def.transcript || (def.passage && def.passage.map((t, i) => (i + 1) + ". " + t)) || null;
+    if (lines && def.show === "always") body.append(h("div", { class: "tx" }, lines.map(l => h("p", {}, l))));
+    if (!st.qi) {
+      const missed = (miniData(def.id).data.missed || []).slice(0, 2), rest = shuffle(def.qs.map((_, i) => i).filter(i => !missed.includes(i)));
+      st.qi = shuffle(missed.concat(rest).slice(0, Math.min(def.draw || 3, def.qs.length)));
+    }
+    const QS = st.qi.map(i => def.qs[i]);
+    QS.forEach((q, qi) => {
+      const opts = q.options || def.transcript;
+      const card = h("div", { class: "q" }, h("div", { class: "qt" }, h("i", {}, (qi + 1) + "."), q.q));
+      const box = h("div", { class: "opts" });
+      opts.forEach((o, oi) => {
+        const picked = st.ans[qi], isAns = oi === q.answer;
+        box.append(h("button", { class: "opt" + (M.checked ? (isAns ? " ok" : picked === oi ? " bad" : "") : (picked === oi ? " sel" : "")), disabled: M.checked,
+          onclick: () => { st.ans[qi] = oi; renderMini(); } }, h("b", {}, "ABCDEF"[oi]), o));
+      });
+      card.append(box);
+      if (M.checked) card.append(h("div", { class: "why " + (st.ans[qi] === q.answer ? "ok" : "bad") }, (st.ans[qi] === q.answer ? "✔ Correct. " : "✖ Not quite. ") + q.why));
+      body.append(card);
+    });
+    if (M.checked && def.audio && def.show === "after") body.append(h("div", { class: "tx" }, h("b", {}, "Transcript"), def.audio.map(l => h("p", {}, l[0] + ": " + l[1]))));
+    miniFoot(foot, QS.every((q, i) => st.ans[i] !== undefined), () => { M.checked = true; stopSpeak(); miniData(def.id).data.missed = st.qi.filter((qx, i) => st.ans[i] !== def.qs[qx].answer); finishMini({ correct: QS.filter((q, i) => st.ans[i] === q.answer).length, total: QS.length, missed: miniData(def.id).data.missed }); renderMini(); });
+  }
+  function mSelf(body, foot) {
+    const def = M.def, st = M.st; st.t = st.t || {};
+    body.append(h("p", { class: "intro" }, "Tick what you feel confident doing. This is a reflection, not a MUET band."));
+    def.groups.forEach(g => body.append(h("div", { class: "q" }, h("div", { class: "qt" }, g.icon + " " + g.name),
+      h("div", { class: "ticks" }, g.items.map((t, i) => h("label", { class: "tick" }, h("input", { type: "checkbox", checked: !!st.t[g.k + i], disabled: M.checked, onchange: e => { st.t[g.k + i] = e.target.checked; saveSess(); } }), t))))));
+    body.append(h("p", { class: "intro" }, h("b", {}, "My next practice focus")),
+      h("div", { class: "chips light" }, def.groups.map(g => h("button", { class: st.focus === g.k ? "on" : "", disabled: M.checked, onclick: () => { st.focus = g.k; renderMini(); } }, g.icon + " " + g.name))));
+    body.append(h("p", { class: "intro" }, h("b", {}, "My target band")),
+      h("div", { class: "chips light" }, ["Band 3", "Band 4", "Band 5", "Band 5+"].map(b => h("button", { class: st.band === b ? "on" : "", disabled: M.checked, onclick: () => { st.band = b; renderMini(); } }, b))));
+    if (M.checked) {
+      const n = Object.values(st.t).filter(Boolean).length, nx = def.next[st.focus];
+      body.append(h("div", { class: "why ok" }, `✔ Saved. You ticked ${n} of 12. Next focus: ${nx[0]}.`,
+        h("button", { class: "link", onclick: () => { closeMini(); goTo(nx[1]); } }, ` Go to page ${nx[1]} ›`)));
+    }
+    miniFoot(foot, !!st.focus, () => { M.checked = true; if (st.band) { state.goal = st.band; } finishMini({ focus: st.focus, band: st.band }); renderMini(); }, "Save my self-check");
+  }
+  function mPrep(body, foot) {
+    const def0 = M.def, st = M.st; st.f = st.f || {};
+    if (st.pi === undefined) st.pi = Math.floor(Math.random() * def0.prompts.length);
+    const def = Object.assign({}, def0, def0.prompts[st.pi]);
+    body.append(h("p", { class: "intro" }, "Topic: ", h("b", {}, def.prompt)), h("p", { class: "note" }, "Use keywords or short sentences. Your words save automatically."));
+    def.fields.forEach(f => {
+      const ta = h("textarea", { rows: 2, placeholder: f.ph, "aria-label": f.label, disabled: M.checked }, st.f[f.k] || "");
+      ta.addEventListener("input", () => { st.f[f.k] = ta.value; autosave(st, { f: st.f, pi: st.pi }); syncCheck(def.fields.every(x => wc(st.f[x.k]) >= 1)); saveSess(); });
+      body.append(h("div", { class: "fld" }, h("label", {}, h("b", {}, f.k === "P2" ? "P" : f.k), " " + f.label, h("small", {}, f.hint)), ta));
+    });
+    if (M.checked) {
+      const hints = [];
+      def.fields.forEach(f => { if (wc(st.f[f.k]) < 4) hints.push(`Your ${f.label} is very short. Add a few more words.`); });
+      if (!/for example|for instance|such as|last |when /i.test(st.f.E || "")) hints.push("Your Example may need a signpost like “for example” and a real who/what/how.");
+      if (!/\bso\b|therefore|that is why|overall|this is why/i.test(st.f.P2 || "")) hints.push("Start your closing point with “So,” or “That is why…” to link back.");
+      body.append(h("div", { class: "why " + (hints.length ? "bad" : "ok") }, hints.length ? ["Small improvements: ", h("ul", {}, hints.map(x => h("li", {}, x)))] : "✔ Nice. All four parts are there and clearly signposted."));
+      body.append(h("div", { class: "tx" }, h("b", {}, "Model PREP"), def.fields.map(f => h("p", {}, h("b", {}, f.label + ": "), def.model[f.k]))));
+      body.append(h("p", { class: "intro" }, "Self-check (for learning, not a MUET band):"), tick(def.check, st));
+    }
+    miniFoot(foot, def.fields.every(f => wc(st.f[f.k]) >= 1), () => { M.checked = true; finishMini(); renderMini(); }, "Check my PREP");
+  }
+  function mPeel(body, foot) {
+    const def0 = M.def, st = M.st;
+    if (st.si === undefined) st.si = Math.floor(Math.random() * def0.sets.length);
+    const def = Object.assign({}, def0, def0.sets[st.si]);
+    if (!st.order) { st.order = []; st.pool = shuffle(def.sentences.map((x, i) => i)); }
+    st.f = st.f || {};
+    if (M.step === 0) {
+      body.append(h("p", { class: "intro" }, "Step 1 of 2 · Tap the sentences in PEEL order: Point, Explain, Example, Link."));
+      const slots = h("div", { class: "slots" });
+      ["Point", "Explain", "Example", "Link"].forEach((lab, i) => {
+        const idx = st.order[i], ok = M.checked && idx === i;
+        slots.append(h("button", { class: "slot" + (idx !== undefined ? " full" : "") + (M.checked ? (ok ? " ok" : " bad") : ""), disabled: M.checked || idx === undefined,
+          onclick: () => { st.pool.push(st.order.splice(i, 1)[0]); renderMini(); } }, h("b", {}, lab), idx !== undefined ? def.sentences[idx].t : "Tap a sentence below"));
+      });
+      body.append(slots, h("div", { class: "opts" }, st.pool.map(i => h("button", { class: "opt", disabled: M.checked || st.order.length >= 4, onclick: () => { st.order.push(i); st.pool = st.pool.filter(x => x !== i); renderMini(); } }, def.sentences[i].t))));
+      const right = st.order.length === 4 && st.order.every((v, i) => v === i);
+      if (M.checked) body.append(h("div", { class: "why " + (right ? "ok" : "bad") }, right ? "✔ Correct PEEL order. See how “For instance” and “Therefore” signpost the Example and the Link." : "Not quite. The order is Point → Explain → Example → Link. Check the red boxes."));
+      if (!M.checked) foot.append(h("span", { class: "sc" }, st.order.length === 4 ? "Ready to check" : "Place all 4 sentences"), h("button", { class: "btn", disabled: st.order.length !== 4, onclick: () => { M.checked = true; renderMini(); } }, "Check my order"));
+      else foot.append(h("span", { class: "sc" }, "Step 1 done"), h("button", { class: "btn go", onclick: () => { M.step = 1; M.checked = false; renderMini(); } }, "Next: write my own ›"));
+      return;
+    }
+    const cur = () => (M.revise ? (st.v2 = st.v2 || {}) : st.f);
+    body.append(h("p", { class: "intro" }, "Step 2 of 2 · Task: ", h("b", {}, def.task)), h("p", { class: "note" }, M.revise ? "Improving your paragraph. Your first version is kept." : "Write one sentence for each part."));
+    def.fields.forEach(f => {
+      const ta = h("textarea", { rows: 2, placeholder: f.ph, "aria-label": f.label, disabled: M.checked }, cur()[f.k] || "");
+      ta.addEventListener("input", () => { cur()[f.k] = ta.value; autosave(st, { f: st.f, v2: st.v2, si: st.si }); syncCheck(def.fields.every(x => wc(cur()[x.k]) >= 1)); saveSess(); });
+      body.append(h("div", { class: "fld" }, h("label", {}, h("b", {}, f.label)), ta));
+    });
+    if (M.checked) {
+      const c = cur(), hints = [];
+      def.fields.forEach(f => { if (wc(c[f.k]) < 6) hints.push(`Your ${f.label} could be a fuller sentence.`); });
+      if (!/for example|for instance|such as/i.test(c.E2 || "")) hints.push("Start your Example with “For instance” or “For example”.");
+      if (!/therefore|\bso\b|this is why|overall|as a result/i.test(c.L || "")) hints.push("Start your Link with “Therefore,” or “As a result,”.");
+      body.append(h("div", { class: "why " + (hints.length ? "bad" : "ok") }, hints.length ? ["To improve: ", h("ul", {}, hints.map(x => h("li", {}, x)))] : "✔ Good paragraph. Each part has a job."));
+      body.append(h("p", { class: "intro" }, "Self-check:"), tick(def.check, st));
+      if (M.revise) body.append(h("div", { class: "tx" }, h("b", {}, "My first version"), def.fields.map(f => h("p", {}, h("b", {}, f.label + ": "), st.f[f.k] || "–"))));
+    }
+    const btns = miniFoot(foot, def.fields.every(f => wc(cur()[f.k]) >= 1), () => { M.checked = true; finishMini(); renderMini(); }, "Check my paragraph");
+    if (M.checked) btns.prepend(h("button", { class: "btn alt", onclick: () => { M.revise = true; st.v2 = st.v2 || Object.assign({}, st.f); M.checked = false; renderMini(); } }, "✏️ Improve it"));
+  }
+  function stopRecording() { if (rec) { try { rec.timer && clearInterval(rec.timer); rec.mr && rec.mr.state !== "inactive" && rec.mr.stop(); rec.stream && rec.stream.getTracks().forEach(t => t.stop()); } catch (e) {} rec = null; } }
+  async function startRecording(slot) {
+    if (!navigator.mediaDevices || !window.MediaRecorder) { M.st.noMic = true; return renderMini(); }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true }), mr = new MediaRecorder(stream), chunks = [], myM = M;
+      rec = { mr, stream, left: 60, slot };
+      mr.ondataavailable = e => e.data.size && chunks.push(e.data);
+      mr.onstop = async () => {
+        const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+        stream.getTracks().forEach(t => t.stop()); if (rec && rec.timer) clearInterval(rec.timer); rec = null;
+        await AUD.put(myM.def.id + ":" + slot, blob);
+        if (M === myM) { M.st.urls = M.st.urls || {}; M.st.urls[slot] = URL.createObjectURL(blob); M.step = slot === 1 ? 2 : 4; renderMini(); }
+      };
+      mr.start();
+      rec.timer = setInterval(() => { if (!rec) return; rec.left--; const t = $("#recT"); if (t) t.textContent = rec.left + "s"; if (rec.left <= 0) mr.stop(); }, 1000);
+      renderMini();
+    } catch (e) { M.st.noMic = true; renderMini(); }
+  }
+  function mSpeak(body, foot) {
+    const def = M.def, st = M.st, step = M.step; st.f = st.f || {}; st.topic = st.topic || pick(def.topics);
+    body.append(h("div", { class: "stepper" }, ["Plan", "Record", "Listen back", "Record again", "Done"].map((n, i) => h("span", { class: i === step ? "cur" : i < step ? "ok" : "" }, (i + 1) + " " + n))));
+    body.append(h("div", { class: "topic" }, "Topic: ", h("b", {}, st.topic), step === 0 ? h("button", { class: "link", onclick: () => { st.topic = pick(def.topics.filter(x => x !== st.topic)); renderMini(); } }, " 🎲 Another topic") : null));
+    const next = (label, fn) => foot.append(h("span", { class: "sc" }, ""), h("button", { class: "btn go", onclick: fn }, label));
+    if (st.noMic && (step === 1 || step === 3)) { body.append(h("div", { class: "why bad" }, "Recording is not available (microphone blocked or not supported). Speak aloud for 1 minute, then continue.")); return next("I spoke aloud ›", () => { st.noMic = false; M.step = step === 1 ? 2 : 4; renderMini(); }); }
+    if (step === 0) {
+      body.append(h("p", { class: "intro" }, "Plan with keywords, not sentences. About 30 seconds."));
+      const kw = h("textarea", { rows: 3, placeholder: "P: …   R: …   E: …   P: …" }, st.f.kw || ""); kw.addEventListener("input", () => { st.f.kw = kw.value; });
+      body.append(h("div", { class: "timer", id: "planT" }, "30s"), h("button", { class: "btn alt", style: "margin:8px 0", onclick: () => { clearInterval(planT); let n = 30; planT = setInterval(() => { n--; const e = $("#planT"); if (e) e.textContent = n + "s"; if (n <= 0) clearInterval(planT); }, 1000); } }, "⏱ Start 30s timer"), kw);
+      return next("Record my response ›", () => { clearInterval(planT); M.step = 1; renderMini(); });
+    }
+    if (step === 1 || step === 3) {
+      const slot = step === 1 ? 1 : 2, on = rec && rec.slot === slot;
+      body.append(h("p", { class: "intro" }, step === 1 ? "Speak for up to 1 minute using P-R-E-P. Press stop when you finish." : "Improve it. Fix the one thing you chose, then record again."));
+      body.append(on ? h("div", { class: "timer rec" }, "● Recording ", h("span", { id: "recT" }, rec.left + "s")) : h("div", { class: "timer" }, "Ready"));
+      body.append(on ? h("button", { class: "btn", onclick: () => rec.mr.stop() }, "■ Stop") : h("button", { class: "btn", onclick: () => startRecording(slot) }, "● Start recording"));
+      foot.append(h("span", { class: "sc" }, "Recordings stay on your device."), step === 3 ? h("button", { class: "link", onclick: () => { stopRecording(); M.step = 4; renderMini(); } }, "Skip") : null);
+      return;
+    }
+    if (step === 2) {
+      body.append(h("p", { class: "intro" }, "Listen to yourself, then tick what you did:"));
+      if (st.urls && st.urls[1]) body.append(h("audio", { src: st.urls[1], controls: "" }));
+      body.append(tick(def.check, st), h("div", { class: "fld" }, h("label", {}, h("b", {}, "One thing I will improve:")), h("textarea", { rows: 2, placeholder: "e.g. a more specific example", oninput: e => { st.f.fix = e.target.value; } }, st.f.fix || "")));
+      return next("Record a better version ›", () => { M.step = 3; renderMini(); });
+    }
+    body.append(h("div", { class: "why ok" }, "✔ Well done. Hearing yourself and improving is the real practice. Self-checks are for learning, not a predicted MUET band."));
+    if (st.urls && st.urls[1]) body.append(h("p", {}, "First try"), h("audio", { src: st.urls[1], controls: "" }));
+    if (st.urls && st.urls[2]) body.append(h("p", {}, "Improved try"), h("audio", { src: st.urls[2], controls: "" }));
+    if (!M.checked) { M.checked = true; finishMini(); }
+    miniFoot(foot, true, () => {});
   }
 
   /* ---------------- start ---------------- */
@@ -710,7 +967,7 @@
     if (state.streak.day === today) return state.streak.n;
     state.streak = { day: today, n: state.streak.day === y ? state.streak.n + 1 : 1 }; save(); return state.streak.n;
   }
-  paintGreet(); refresh(); setZoom(1);
+  paintGreet(); refresh(); setZoom(1); refreshMinis();
   const streak = bumpStreak();
   if (!state.name && !state.skipped) showWelcome(false);
   else if (!state.hinted) { const hint = $("#hint"); hint.hidden = false; setTimeout(() => { hint.hidden = true; state.hinted = true; save(); }, 6500); }

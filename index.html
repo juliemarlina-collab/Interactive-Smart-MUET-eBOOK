@@ -35,6 +35,7 @@
     <div id="book"></div>
     <button class="nav next" id="btnNext" aria-label="Next page">›</button>
     <button id="cpBtn" class="cp" hidden></button>
+    <div id="miniDock" class="mdock"></div>
     <div id="hint" class="hint" hidden>👆 Swipe or drag a page corner to turn · tap blue links to open them</div>
     <button id="btnExit" class="exit" hidden aria-label="Exit full screen">✕</button>
   </main>
@@ -75,6 +76,7 @@
   <div id="mediaModal" class="modal" hidden role="dialog" aria-modal="true">
     <div class="sheet media" id="mediaSheet"></div>
   </div>
+  <div id="miniModal" class="modal" hidden role="dialog" aria-modal="true"><div class="sheet" id="miniSheet"></div></div>
   <div id="search" class="modal" hidden role="dialog" aria-modal="true">
     <div class="sheet srch"><div class="sbar"><span>🔍</span><input id="sInput" type="search" placeholder="Search: PREP, band, exam slip, listening…" autocomplete="off"><button class="x" id="sClose" aria-label="Close">✕</button></div><div id="sRes" class="sres"></div></div>
   </div>
@@ -87,6 +89,8 @@
         <p>This is your own interactive MUET guide. Flip the pages, tap the blue links, and clear a short checkpoint after each unit. I’ll cheer you on.</p>
         <label for="wName">What should I call you?</label>
         <input id="wName" type="text" maxlength="24" placeholder="Your first name" autocomplete="given-name">
+        <label>How do you want to read?</label>
+        <div class="chips" id="wMode"><button data-m="guided">Guided · checkpoints unlock units</button><button data-m="free">Free · read anything</button></div>
         <label>Your MUET target</label>
         <div class="chips" id="wGoal"><button data-g="Band 3">Band 3</button><button data-g="Band 4">Band 4</button><button data-g="Band 5">Band 5</button><button data-g="Band 5+" >Band 5+</button></div>
         <button class="btn go" id="wGo">Open the book ›</button>

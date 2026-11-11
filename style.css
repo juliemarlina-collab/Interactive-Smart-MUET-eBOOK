@@ -280,3 +280,47 @@ button{font:inherit;cursor:pointer;border:0;color:inherit}
   .navrow{justify-content:center;gap:10px}
 }
 @media(max-width:720px){.tools #btnLinks,.tools #btnShare{display:none}}
+
+/* ---------- on-page mini activity buttons + mini sheets ---------- */
+.hot.mini{display:flex;align-items:center;justify-content:center;gap:6px;background:linear-gradient(135deg,var(--mc,#3542E8),#17151E 190%);color:#fff;font-weight:800;
+  font-size:clamp(9px,1.45vw,17px);border-radius:99px;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,.3);border:2px solid #fff;padding:0 10px;animation:nudge 2.6s ease-in-out infinite}
+.hot.mini:hover{filter:brightness(1.1);background:linear-gradient(135deg,var(--mc,#3542E8),#17151E 190%)}
+.hot.mini.done{background:#12936B;animation:none}
+@keyframes nudge{0%,88%,100%{transform:scale(1)}94%{transform:scale(1.05)}}
+.opt.sel{outline:3px solid var(--blue);background:#eef0ff}
+.chips.light button{background:var(--soft);color:var(--ink)}.chips.light button.on{background:var(--blue);color:#fff}
+.chips.light{margin:0 0 10px}
+.tx{background:#f7f5fd;border-radius:14px;padding:10px 14px;margin:10px 0;line-height:1.5;font-size:15px}
+.tx p{margin:4px 0}
+.fld{margin:10px 0}.fld label{display:block;font-size:15px;margin-bottom:4px}.fld small{display:block;color:var(--muted);font-weight:400}
+.mbody textarea{width:100%;padding:10px 12px;border-radius:12px;border:2px solid #ddd8ee;font:inherit;resize:vertical;color:var(--ink)}
+.mbody textarea:focus{outline:0;border-color:var(--blue)}
+.ticks{display:grid;gap:6px;margin:6px 0 10px}
+.tick{display:flex;gap:10px;align-items:center;background:var(--soft);border-radius:12px;padding:12px;font-size:15px;min-height:48px}
+.tick input{width:22px;height:22px;flex:none}
+.slots{display:grid;gap:8px;margin:8px 0 12px}
+.slot{text-align:left;padding:12px;border-radius:14px;border:2px dashed #c9c2e6;background:#fff;min-height:56px;color:var(--muted)}
+.slot b{display:block;color:var(--ink);font-size:13px}.slot.full{border-style:solid;border-color:var(--blue);color:var(--ink);background:#eef0ff}
+.slot.ok{border-color:var(--ok);background:#e2f7ef}.slot.bad{border-color:var(--bad);background:#fde8ec}
+.stepper{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;font-weight:700}
+.stepper span{padding:6px 10px;border-radius:99px;background:var(--soft);color:var(--muted)}
+.stepper .cur{background:var(--blue);color:#fff}.stepper .ok{background:#d9f5ec;color:var(--ok)}
+.topic{background:#fff6dc;border-radius:12px;padding:10px 14px;margin-bottom:10px}
+.timer{font:800 34px Arial;text-align:center;padding:10px;color:var(--blue)}.timer.rec{color:var(--bad)}
+.modebox{background:var(--soft);border-radius:14px;padding:12px;margin:10px 0}.modebox small{display:block;color:var(--muted);margin-top:4px}
+.mbody audio{width:100%;margin:6px 0}
+@media(max-width:720px){.hot.mini{font-size:clamp(8px,2.5vw,13px);padding:0 4px}}
+.stage:not(.zoomed){overflow:clip}
+.page .hot{pointer-events:none}
+.page.vis .hot{pointer-events:auto}
+.page:not(.vis){pointer-events:none}
+
+/* floating activity cards */
+.mdock{position:absolute;right:14px;bottom:14px;z-index:7;display:flex;flex-direction:column;gap:10px;align-items:flex-end;max-width:min(380px,46vw)}
+.mcard{display:flex;align-items:center;gap:12px;text-align:left;background:#fff;color:#17151E;border:2px solid var(--mc,#3542E8);border-radius:20px;padding:10px 16px 10px 10px;box-shadow:0 8px 22px rgba(0,0,0,.35);cursor:pointer;animation:nudge 2.8s ease-in-out infinite}
+.mcard:hover{transform:translateY(-2px)}
+.mcard .mic{flex:none;width:44px;height:44px;border-radius:50%;background:var(--mc,#3542E8);color:#fff;display:grid;place-items:center;font-size:18px}
+.mcard .mtx b{display:block;font-size:15px;line-height:1.25;font-weight:800}
+.mcard .mtx small{display:block;font-size:13px;font-weight:600;color:#4a4757;margin-top:2px}
+.mcard.done{border-color:#12936B;animation:none}.mcard.done .mic{background:#12936B}
+@media(max-width:720px){.mdock{left:8px;right:8px;bottom:64px;max-width:none;align-items:stretch}.mcard .mtx b{font-size:13px}.mcard .mic{width:36px;height:36px}}
