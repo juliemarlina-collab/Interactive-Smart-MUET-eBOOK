@@ -78,17 +78,32 @@
 
   function hashStart() { const m = /[#&]p=(\d+)/.exec(location.hash || ""); if (!m) return 0; const p = Math.max(1, Math.min(N, +m[1])); return p <= 1 ? 0 : (p % 2 === 1 ? p - 1 : p - 2) ; }
   /* ---------------- flipbook ---------------- */
-  const pf = new St.PageFlip(bookEl, {
+  /* A blank page sits in front of the cover so the cover is the RIGHT page of the first spread.
+     That makes the cover turn like a real book (no re-centring jump). Our own page numbers stay the same. */
+  const raw = new St.PageFlip(bookEl, {
     width: 500, height: 707, size: "stretch",
     minWidth: 240, maxWidth: 760, minHeight: 340, maxHeight: 1075,
-    showCover: true, maxShadowOpacity: 0.45, drawShadow: true, flippingTime: 750,
+    showCover: false, maxShadowOpacity: 0.5, drawShadow: true, flippingTime: 850,
     usePortrait: true, mobileScrollSupport: false, swipeDistance: 22,
-    clickEventForward: true, useMouseEvents: true, startPage: Math.min(hashStart() || state.last || 0, N - 1), autoSize: true
+    clickEventForward: true, useMouseEvents: true, startPage: Math.min(hashStart() || state.last || 0, N - 1) + 1, autoSize: true
   });
-  pf.loadFromHTML(pageEls);
+  const blankEl = h("div", { class: "page blank", "data-density": "soft" });
+  raw.loadFromHTML([blankEl].concat(pageEls));
+  const rawPortrait = () => raw.getOrientation() === "portrait";
+  const toRaw = m => m + 1;
+  const pf = {
+    getCurrentPageIndex() { const r = raw.getCurrentPageIndex(); return rawPortrait() ? Math.max(r - 1, 0) : (r <= 1 ? 0 : r - 1); },
+    getOrientation: () => raw.getOrientation(),
+    turnToPage(m) { raw.turnToPage(toRaw(m)); }, flip(m) { raw.flip(toRaw(m)); },
+    flipNext() { raw.flipNext(); },
+    flipPrev() { if (rawPortrait() && raw.getCurrentPageIndex() <= 1) return; raw.flipPrev(); },
+    on(ev, fn) { raw.on(ev, fn); }, update() { raw.update(); }
+  };
 
   const portrait = () => pf.getOrientation() === "portrait";
   const leftOf = idx => (portrait() || idx === 0) ? idx : (idx % 2 === 1 ? idx : idx - 1);
+  raw.on("flip", () => { if (rawPortrait() && raw.getCurrentPageIndex() === 0) raw.turnToPage(1); });
+  function centreCover() { const on = !rawPortrait() && raw.getCurrentPageIndex() <= 1, w = pageEls[0].offsetWidth || 0; bookEl.style.transition = "transform .85s cubic-bezier(.45,.05,.25,1)"; bookEl.style.transform = on && w ? `translateX(${-w / 2}px)` : "none"; }
   const visible = cur => { if (portrait() || cur === 0) return [cur]; return cur + 1 < N ? [cur, cur + 1] : [cur]; };
 
   /* ---------------- navigation with unit gating ---------------- */
@@ -156,6 +171,7 @@
   }
   pf.on("flip", onFlip);
   pf.on("changeOrientation", () => { refresh(); });
+  window.addEventListener("resize", () => setTimeout(centreCover, 120));
   pf.on("changeState", e => { if (e.data === "flipping") playFlip(); });
 
   function pageLabel(cur) {
@@ -169,7 +185,7 @@
     $("#slider").value = v[0] + 1;
     $("#btnPrev").disabled = cur === 0;
     $("#btnNext").disabled = v.includes(N - 1);
-    pageEls.forEach((pe, i) => pe.classList.toggle("vis", v.includes(i)));
+    pageEls.forEach((pe, i) => pe.classList.toggle("vis", v.includes(i))); centreCover();
     $("#btnNext2").disabled = v.includes(N - 1); $("#btnPrev2").disabled = cur === 0;
     $("#pageIn").value = v[0] + 1; $("#pgTot").textContent = "/ " + N;
     const mk = $("#btnMark"); const marked = v.some(x => state.marks.includes(x + 1)); mk.textContent = marked ? "⭐" : "☆"; mk.classList.toggle("on", marked);
@@ -453,18 +469,27 @@
 
   /* ---------------- page-turn sound (WebAudio, no files needed) ---------------- */
   let ac;
+  let lastFlipSnd = 0;
   function playFlip() {
     if (!state.sound) return;
+    const now = Date.now(); if (now - lastFlipSnd < 450) return; lastFlipSnd = now;
     try {
       ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-      const len = ac.sampleRate * 0.28, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) { const t = i / len; d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * t) * Math.pow(1 - t, 0.6) * 0.5; }
+      const dur = 0.42, len = Math.floor(ac.sampleRate * dur), buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) { const t = i / len; d[i] = (Math.random() * 2 - 1) * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.7)), 1.6); }
       const s = ac.createBufferSource(); s.buffer = buf;
-      const f = ac.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 2400; f.Q.value = 0.7;
-      const g = ac.createGain(); g.gain.value = 0.35;
-      s.connect(f); f.connect(g); g.connect(ac.destination); s.start();
+      const f = ac.createBiquadFilter(); f.type = "bandpass"; f.Q.value = 0.9;
+      f.frequency.setValueAtTime(700, ac.currentTime); f.frequency.exponentialRampToValueAtTime(2200, ac.currentTime + dur * 0.55); f.frequency.exponentialRampToValueAtTime(900, ac.currentTime + dur);
+      const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 3200;
+      const g = ac.createGain(); g.gain.value = 0.22;
+      s.connect(f); f.connect(lp); lp.connect(g); g.connect(ac.destination); s.start();
+      // soft landing "tap" when the page settles
+      const t0 = ac.currentTime + 0.78, o = ac.createOscillator(), og = ac.createGain(); o.type = "sine"; o.frequency.setValueAtTime(150, t0); o.frequency.exponentialRampToValueAtTime(70, t0 + 0.09);
+      og.gain.setValueAtTime(0.0001, t0); og.gain.exponentialRampToValueAtTime(0.16, t0 + 0.01); og.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+      o.connect(og); og.connect(ac.destination); o.start(t0); o.stop(t0 + 0.14);
     } catch (e) {}
   }
+
 
   /* ---------------- text-to-speech (device voice) ---------------- */
   let speaking = null;

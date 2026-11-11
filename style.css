@@ -71,8 +71,8 @@ button{font:inherit;cursor:pointer;border:0;color:inherit}
 #slider{flex:1;accent-color:var(--orange);height:32px}
 
 /* ---------- drawer ---------- */
-.drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,92vw);background:#fff;z-index:30;transform:translateX(105%);
-  transition:transform .28s;display:flex;flex-direction:column;box-shadow:-10px 0 40px rgba(0,0,0,.35)}
+.drawer{position:fixed;top:0;left:0;bottom:0;width:min(420px,92vw);background:#fff;z-index:30;transform:translateX(-105%);
+  transition:transform .28s;display:flex;flex-direction:column;box-shadow:10px 0 40px rgba(0,0,0,.35)}
 .drawer.open{transform:none}
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:25}
 .dhead{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid #e7e3f3}
@@ -349,3 +349,8 @@ button{font:inherit;cursor:pointer;border:0;color:inherit}
 .wlogo{animation:popin .8s cubic-bezier(.2,1.6,.4,1) both,floaty 4.5s 1s ease-in-out infinite}
 @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @media(prefers-reduced-motion:reduce){.mot,.wlogo,.mcard{animation:none!important}}
+
+.page.blank{background:transparent!important;box-shadow:none!important}
+.page.blank *{display:none}
+.top{gap:10px}
+#btnToc{flex:none}
