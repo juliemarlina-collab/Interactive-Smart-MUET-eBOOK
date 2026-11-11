@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Smart MUET Guide · Interactive eBook</title>
+<meta name="description" content="Smart MUET Guide: an interactive flipbook with checkpoint activities after every unit.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23FF751F'/%3E%3Ctext x='32' y='46' font-size='40' font-weight='900' text-anchor='middle' fill='white' font-family='Arial'%3ES%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="top">
+    <div class="brand">
+      <span class="logo">S</span>
+      <div><b>Smart MUET Guide</b><small>Band Up! 2027 · Interactive eBook</small></div>
+    </div>
+    <div class="prog" title="Units completed"><span id="progTxt">0 / 8 units</span><i><b id="progBar"></b></i></div>
+    <div class="tools">
+      <button id="btnLinks" class="ico" aria-label="Show clickable links" title="Show clickable links">🔗</button>
+      <button id="btnSound" class="ico" aria-label="Page-turn sound" title="Page-turn sound">🔊</button>
+      <button id="btnFocus" class="ico" aria-label="Full screen" title="Full screen">⛶</button>
+      <button id="btnToc" class="ico big" aria-label="Contents">☰ <span>Contents</span></button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <button class="nav prev" id="btnPrev" aria-label="Previous page">‹</button>
+    <div id="book"></div>
+    <button class="nav next" id="btnNext" aria-label="Next page">›</button>
+    <button id="cpBtn" class="cp" hidden></button>
+    <div id="hint" class="hint" hidden>👆 Swipe or drag a page corner to turn · tap blue links to open them</div>
+    <button id="btnExit" class="exit" hidden aria-label="Exit full screen">✕</button>
+  </main>
+
+  <footer class="bar">
+    <button class="pill" id="btnFirst" aria-label="Cover">⏮</button>
+    <input id="slider" type="range" min="1" max="53" value="1" aria-label="Go to page">
+    <span id="pageLbl" class="lbl">Cover</span>
+    <button class="pill" id="btnLast" aria-label="Last page">⏭</button>
+  </footer>
+
+  <aside id="drawer" class="drawer" aria-hidden="true">
+    <div class="dhead">
+      <div class="tabs">
+        <button class="tab on" data-tab="toc">Contents</button>
+        <button class="tab" data-tab="pages">All pages</button>
+      </div>
+      <button class="ico" id="btnCloseDrawer" aria-label="Close">✕</button>
+    </div>
+    <div id="tocPane" class="dbody"></div>
+    <div id="pagesPane" class="dbody" hidden></div>
+    <div class="dfoot"><button id="btnReset" class="link">Reset my progress</button></div>
+  </aside>
+  <div id="scrim" class="scrim" hidden></div>
+
+  <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="sheet" id="sheet"></div>
+  </div>
+  <div id="mediaModal" class="modal" hidden role="dialog" aria-modal="true">
+    <div class="sheet media" id="mediaSheet"></div>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+</div>
+
+<script src="lib/page-flip.browser.js"></script>
+<script src="activities.js"></script>
+<script src="links.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
