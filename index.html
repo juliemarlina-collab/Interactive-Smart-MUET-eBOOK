@@ -14,12 +14,17 @@
   <header class="top">
     <div class="brand">
       <span class="logo">S</span>
-      <div><b>Smart MUET Guide</b><small>Band Up! 2027 · Interactive eBook</small></div>
+      <div><b>Smart MUET Guide</b><small id="greet">Band Up! 2027 · Interactive eBook</small></div>
     </div>
     <div class="prog" title="Units completed"><span id="progTxt">0 / 8 units</span><i><b id="progBar"></b></i></div>
     <div class="tools">
-      <button id="btnLinks" class="ico" aria-label="Show clickable links" title="Show clickable links">🔗</button>
-      <button id="btnSound" class="ico" aria-label="Page-turn sound" title="Page-turn sound">🔊</button>
+      <button id="btnSearch" class="ico" aria-label="Search" title="Search the guide">🔍</button>
+      <div class="zoom" title="Zoom"><button id="zOut" aria-label="Zoom out">−</button><span id="zLbl">100%</span><button id="zIn" aria-label="Zoom in">+</button></div>
+      <button id="btnPlay" class="ico" aria-label="Auto-flip" title="Auto-flip pages">▶</button>
+      <button id="btnMark" class="ico" aria-label="Bookmark this page" title="Bookmark this page">☆</button>
+      <button id="btnShare" class="ico" aria-label="Share link" title="Copy link to this page">📤</button>
+      <button id="btnLinks" class="ico" aria-label="Show clickable links" title="Highlight clickable links">🔗</button>
+      <button id="btnSound" class="ico" aria-label="Sound" title="Sound on/off">🔊</button>
       <button id="btnFocus" class="ico" aria-label="Full screen" title="Full screen">⛶</button>
       <button id="btnToc" class="ico big" aria-label="Contents">☰ <span>Contents</span></button>
     </div>
@@ -35,10 +40,17 @@
   </main>
 
   <footer class="bar">
-    <button class="pill" id="btnFirst" aria-label="Cover">⏮</button>
-    <input id="slider" type="range" min="1" max="53" value="1" aria-label="Go to page">
-    <span id="pageLbl" class="lbl">Cover</span>
-    <button class="pill" id="btnLast" aria-label="Last page">⏭</button>
+    <div class="navrow">
+      <button class="pill" id="btnFirst" aria-label="Cover">⏮</button>
+      <button class="pill" id="btnPrev2" aria-label="Previous">‹</button>
+      <span class="pgin"><input id="pageIn" type="number" inputmode="numeric" min="1" max="53" value="1" aria-label="Go to page number"><span id="pgTot">/ 53</span></span>
+      <button class="pill" id="btnNext2" aria-label="Next">›</button>
+      <input id="slider" type="range" min="1" max="53" value="1" aria-label="Go to page">
+      <span id="pageLbl" class="lbl">Cover</span>
+      <button class="pill" id="btnLast" aria-label="Last page">⏭</button>
+    </div>
+    <div id="strip" class="strip" aria-label="Page thumbnails"></div>
+    <div class="tips">Tips: swipe or use ← → to turn pages · ☰ opens the chapters · tap any blue link on a page · ☆ saves a page · 🔗 highlights every clickable area</div>
   </footer>
 
   <aside id="drawer" class="drawer" aria-hidden="true">
@@ -46,12 +58,14 @@
       <div class="tabs">
         <button class="tab on" data-tab="toc">Contents</button>
         <button class="tab" data-tab="pages">All pages</button>
+        <button class="tab" data-tab="saved">⭐ Saved</button>
       </div>
       <button class="ico" id="btnCloseDrawer" aria-label="Close">✕</button>
     </div>
     <div id="tocPane" class="dbody"></div>
     <div id="pagesPane" class="dbody" hidden></div>
-    <div class="dfoot"><button id="btnReset" class="link">Reset my progress</button></div>
+    <div id="savedPane" class="dbody" hidden></div>
+    <div class="dfoot"><button id="btnCert" class="btn" hidden>🎓 My certificate</button> <button id="btnName" class="link">Change my name</button> · <button id="btnReset" class="link">Reset my progress</button></div>
   </aside>
   <div id="scrim" class="scrim" hidden></div>
 
@@ -61,6 +75,26 @@
   <div id="mediaModal" class="modal" hidden role="dialog" aria-modal="true">
     <div class="sheet media" id="mediaSheet"></div>
   </div>
+  <div id="search" class="modal" hidden role="dialog" aria-modal="true">
+    <div class="sheet srch"><div class="sbar"><span>🔍</span><input id="sInput" type="search" placeholder="Search: PREP, band, exam slip, listening…" autocomplete="off"><button class="x" id="sClose" aria-label="Close">✕</button></div><div id="sRes" class="sres"></div></div>
+  </div>
+  <div id="welcome" class="welcome" hidden>
+    <div class="wcard">
+      <div class="wcover"><img id="wImg" alt="Smart MUET Guide cover" src="pages/p-01.jpg"></div>
+      <div class="wform">
+        <small>SELAMAT DATANG 👋</small>
+        <h1>Ready to Band Up?</h1>
+        <p>This is your own interactive MUET guide. Flip the pages, tap the blue links, and clear a short checkpoint after each unit. I’ll cheer you on.</p>
+        <label for="wName">What should I call you?</label>
+        <input id="wName" type="text" maxlength="24" placeholder="Your first name" autocomplete="given-name">
+        <label>Your MUET target</label>
+        <div class="chips" id="wGoal"><button data-g="Band 3">Band 3</button><button data-g="Band 4">Band 4</button><button data-g="Band 5">Band 5</button><button data-g="Band 5+" >Band 5+</button></div>
+        <button class="btn go" id="wGo">Open the book ›</button>
+        <button class="link" id="wSkip">Skip for now</button>
+      </div>
+    </div>
+  </div>
+  <div id="confetti" aria-hidden="true"></div>
   <div id="toast" class="toast" hidden></div>
 </div>
 

@@ -24,12 +24,17 @@
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
   /* ---------------- saved progress ---------------- */
-  let state = { units: {}, last: 0, sound: true, hinted: false };
+  let state = { units: {}, last: 0, sound: true, hinted: false, name: "", goal: "", skipped: false, marks: [], streak: { day: "", n: 0 } };
   try { Object.assign(state, JSON.parse(localStorage.getItem(CFG.STORAGE_KEY) || "{}")); } catch (e) {}
   const save = () => { try { localStorage.setItem(CFG.STORAGE_KEY, JSON.stringify(state)); } catch (e) {} };
   const isComplete = u => !!(state.units[u.id] && state.units[u.id].complete);
   const unitScore = u => state.units[u.id] && state.units[u.id].best;
   const firstIncomplete = () => UNITS.find(u => !isComplete(u));
+  const nm = () => (state.name || "").trim();
+  const you = (pre = "", post = "") => nm() ? pre + nm() + post : "";
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const thumbSrc = n => "pages/t/t-" + pad(n) + ".jpg";
+  const unitOfPage = p => UNITS.find(u => p >= u.from && p <= u.end);
 
   /* ---------------- toast ---------------- */
   let toastT;
@@ -67,13 +72,14 @@
   }
   ensureImages(state.last || 0);
 
+  function hashStart() { const m = /[#&]p=(\d+)/.exec(location.hash || ""); if (!m) return 0; const p = Math.max(1, Math.min(N, +m[1])); return p <= 1 ? 0 : (p % 2 === 1 ? p - 1 : p - 2) ; }
   /* ---------------- flipbook ---------------- */
   const pf = new St.PageFlip(bookEl, {
     width: 500, height: 707, size: "stretch",
     minWidth: 240, maxWidth: 760, minHeight: 340, maxHeight: 1075,
     showCover: true, maxShadowOpacity: 0.45, drawShadow: true, flippingTime: 750,
     usePortrait: true, mobileScrollSupport: false, swipeDistance: 22,
-    clickEventForward: true, useMouseEvents: true, startPage: Math.min(state.last || 0, N - 1), autoSize: true
+    clickEventForward: true, useMouseEvents: true, startPage: Math.min(hashStart() || state.last || 0, N - 1), autoSize: true
   });
   pf.loadFromHTML(pageEls);
 
@@ -112,6 +118,10 @@
     } else pf.flipPrev();
   }
   $("#btnNext").onclick = () => step(1);
+  $("#btnNext2").onclick = () => step(1);
+  $("#btnPrev2").onclick = () => step(-1);
+  $("#pageIn").addEventListener("change", e => { const v = Math.max(1, Math.min(N, parseInt(e.target.value, 10) || 1)); goTo(v); });
+  $("#pageIn").addEventListener("focus", e => e.target.select());
   $("#btnPrev").onclick = () => step(-1);
   $("#btnFirst").onclick = () => goTo(1, { jump: true });
   $("#btnLast").onclick = () => goTo(N, { jump: true });
@@ -122,7 +132,7 @@
     if (/INPUT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== "range") return;
     if (e.key === "ArrowRight") step(1);
     if (e.key === "ArrowLeft") step(-1);
-    if (e.key === "Escape") closeDrawer();
+    if (e.key === "Escape") { closeDrawer(); $("#search").hidden = true; }
   });
 
   /* ---------------- UI refresh ---------------- */
@@ -155,6 +165,10 @@
     $("#slider").value = v[0] + 1;
     $("#btnPrev").disabled = cur === 0;
     $("#btnNext").disabled = v.includes(N - 1);
+    $("#btnNext2").disabled = v.includes(N - 1); $("#btnPrev2").disabled = cur === 0;
+    $("#pageIn").value = v[0] + 1; $("#pgTot").textContent = "/ " + N;
+    const mk = $("#btnMark"); const marked = v.some(x => state.marks.includes(x + 1)); mk.textContent = marked ? "⭐" : "☆"; mk.classList.toggle("on", marked);
+    renderStrip(); markStrip(v.map(x => x + 1));
     const done = UNITS.filter(isComplete).length;
     $("#progTxt").textContent = `${done} / ${UNITS.length} units`;
     $("#progBar").style.width = (done / UNITS.length * 100) + "%";
@@ -194,31 +208,54 @@
   $("#btnToc").onclick = openDrawer; $("#btnCloseDrawer").onclick = closeDrawer; scrim.onclick = closeDrawer;
   $$(".tab").forEach(t => t.onclick = () => {
     $$(".tab").forEach(x => x.classList.toggle("on", x === t));
-    $("#tocPane").hidden = t.dataset.tab !== "toc"; $("#pagesPane").hidden = t.dataset.tab !== "pages";
+    $("#tocPane").hidden = t.dataset.tab !== "toc"; $("#pagesPane").hidden = t.dataset.tab !== "pages"; $("#savedPane").hidden = t.dataset.tab !== "saved";
+    if (t.dataset.tab === "saved") renderSaved();
   });
+  function renderSaved() {
+    const box = $("#savedPane"); box.textContent = "";
+    if (!state.marks.length) return box.append(h("p", { class: "empty" }, "No saved pages yet. Tap ☆ at the top to save the page you are on, so you can come back to it fast."));
+    state.marks.slice().sort((a, b) => a - b).forEach(p => {
+      const u = unitOfPage(p);
+      box.append(h("div", { class: "saved-row" },
+        h("button", { class: "saved-go", onclick: () => { closeDrawer(); goTo(p); } }, h("img", { src: thumbSrc(p), alt: "" }), h("span", {}, h("b", {}, "Page " + p), h("small", {}, u ? `Unit ${u.id} · ${u.title}` : "Intro"))),
+        h("button", { class: "ico", "aria-label": "Remove", onclick: () => { state.marks = state.marks.filter(x => x !== p); save(); renderSaved(); refresh(); } }, "✕")));
+    });
+  }
+  $("#btnMark").onclick = () => {
+    const v = visible(pf.getCurrentPageIndex()).map(x => x + 1), p = v[0];
+    if (v.some(x => state.marks.includes(x))) { state.marks = state.marks.filter(x => !v.includes(x)); toast("Bookmark removed."); }
+    else { state.marks.push(p); toast(`⭐ Saved page ${p}. Find it under Contents › Saved.`); }
+    save(); refresh();
+  };
   function renderToc() {
     const box = $("#tocPane"); box.textContent = "";
-    const row = (ic, color, title, sub, page, st) => h("button", { class: "toc-row", onclick: () => { closeDrawer(); goTo(page); } },
-      h("span", { class: "toc-ic", style: "background:" + color }, ic), h("span", {}, h("b", {}, title), h("small", {}, sub)), st);
-    box.append(h("div", { class: "toc-sec" }, "Start"));
-    box.append(row("📕", "#17151E", "Cover", "Page 1", 1), row("📑", "#5E5868", "Contents", "Page 2", 2), row("🚀", "#FF751F", "Start here", "Page 3", 3));
-    box.append(h("div", { class: "toc-sec" }, "Units + checkpoints"));
+    const cur = visible(pf.getCurrentPageIndex()).map(x => x + 1);
     const first = firstIncomplete();
+    const head = h("div", { class: "tochead" }, h("b", {}, nm() ? `Hi ${nm()} 👋` : "Your chapters"), h("small", {}, `${UNITS.filter(isComplete).length} of ${UNITS.length} units done` + (state.goal ? ` · target ${state.goal}` : "")));
+    box.append(head);
+    const pr = (ic, title, sub, page) => h("button", { class: "toc-mini" + (cur.includes(page) ? " cur" : ""), onclick: () => { closeDrawer(); goTo(page); } }, h("span", {}, ic + " " + title), h("small", {}, sub));
+    box.append(h("div", { class: "toc-sec" }, "Start here"));
+    box.append(pr("📕", "Cover", "1", 1), pr("📑", "Contents", "2", 2), pr("🚀", "Start here", "3", 3));
+    box.append(h("div", { class: "toc-sec" }, "Units + checkpoints"));
     UNITS.forEach(u => {
-      const sc = unitScore(u);
-      const st = isComplete(u) ? h("span", { class: "toc-st ok" }, "✔ " + Math.round(sc.score / sc.total * 100) + "%")
-        : (CFG.REQUIRE_COMPLETE && first && u.id > first.id) ? h("span", { class: "toc-st lock" }, "🔒")
-        : h("span", { class: "toc-st todo" }, "To do");
-      const r = row(u.icon, u.color, `Unit ${u.id} · ${u.title}`, `Pages ${u.from}–${u.end} · checkpoint at page ${u.end}`, u.from, st);
-      box.append(r);
-      box.append(h("button", { class: "link", style: "display:block;margin:-2px 0 10px 56px", onclick: () => { closeDrawer(); openUnit(u); } }, "Open checkpoint →"));
+      const sc = unitScore(u), isCur = cur.some(p => p >= u.from && p <= u.end);
+      const locked = CFG.REQUIRE_COMPLETE && first && u.id > first.id;
+      const st = isComplete(u) ? h("span", { class: "toc-st ok" }, Math.round(sc.score / sc.total * 100) + "%")
+        : locked ? h("span", { class: "toc-st lock" }, "🔒") : h("span", { class: "toc-st todo" }, "To do");
+      const card = h("div", { class: "unit-card" + (isCur ? " cur" : "") + (isComplete(u) ? " done" : "") },
+        h("button", { class: "unit-main", onclick: () => { closeDrawer(); goTo(u.from); } },
+          h("span", { class: "unit-num", style: "color:" + u.color }, pad(u.id)),
+          h("span", { class: "unit-t" }, h("b", {}, u.title), h("small", {}, `Pages ${u.from}–${u.end} · ${u.icon} checkpoint at p. ${u.end}`)), st),
+        h("button", { class: "link", onclick: () => { closeDrawer(); openUnit(u); } }, isComplete(u) ? "Review checkpoint →" : "Open checkpoint →"));
+      box.append(card);
     });
+    $("#btnCert").hidden = !UNITS.every(isComplete);
   }
   function renderThumbs() {
     const box = $("#pagesPane"); if (box.childElementCount) return;
     const g = h("div", { class: "thumbs" });
     for (let i = 1; i <= N; i++) {
-      const im = h("img", { alt: "Page " + i, loading: "lazy", src: imgSrc(i) });
+      const im = h("img", { alt: "Page " + i, loading: "lazy", src: thumbSrc(i) });
       g.append(h("button", { class: "thumb", "data-p": i, onclick: () => { closeDrawer(); goTo(i); } }, im, "p. " + i));
     }
     box.append(g); markThumbs(pf.getCurrentPageIndex());
@@ -229,6 +266,163 @@
       state.units = {}; state.last = 0; save(); lastPrompted = null; refresh(); goTo(1, { jump: true }); closeDrawer(); toast("Progress reset.");
     }
   };
+
+
+  /* ---------------- thumbnail strip ---------------- */
+  let stripBuilt = false;
+  function renderStrip() {
+    const box = $("#strip"), first = firstIncomplete();
+    if (!stripBuilt) {
+      stripBuilt = true;
+      for (let i = 1; i <= N; i++) {
+        const u = UNITS.find(x => x.end === i);
+        box.append(h("button", { class: "st", "data-p": i, "aria-label": "Page " + i, onclick: () => goTo(i) },
+          h("img", { src: thumbSrc(i), alt: "", loading: "lazy", draggable: "false" }), h("em", {}, i), u ? h("i", { class: "flag" }, "🏁") : null));
+      }
+    }
+    $$(".st", box).forEach(b => { const p = +b.dataset.p; b.classList.toggle("lock", !!(CFG.REQUIRE_COMPLETE && first && p > first.end)); });
+  }
+  function markStrip(pages) {
+    const box = $("#strip"); let cur = null;
+    $$(".st", box).forEach(b => { const on = pages.includes(+b.dataset.p); b.classList.toggle("cur", on); if (on && !cur) cur = b; });
+    if (cur) box.scrollTo({ left: cur.offsetLeft - box.clientWidth / 2 + cur.clientWidth / 2, behavior: "smooth" });
+  }
+
+  /* ---------------- zoom ---------------- */
+  let zoom = 1;
+  function setZoom(z) {
+    zoom = Math.max(1, Math.min(2.5, Math.round(z * 4) / 4));
+    const b = $("#book"); b.style.width = (zoom * 100) + "%"; b.style.height = (zoom * 100) + "%";
+    $("#stage").classList.toggle("zoomed", zoom > 1); $("#zLbl").textContent = Math.round(zoom * 100) + "%";
+    setTimeout(() => { window.dispatchEvent(new Event("resize")); try { pf.update(); } catch (e) {} }, 60);
+  }
+  $("#zIn").onclick = () => setZoom(zoom + 0.25); $("#zOut").onclick = () => setZoom(zoom - 0.25);
+  $("#zLbl").onclick = () => setZoom(1);
+
+  /* ---------------- auto-flip (slideshow) ---------------- */
+  let autoT = null;
+  function stopAuto(msg) { if (autoT) { clearInterval(autoT); autoT = null; } const b = $("#btnPlay"); b.textContent = "▶"; b.classList.remove("on"); if (msg) toast(msg, 2200); }
+  $("#btnPlay").onclick = () => {
+    if (autoT) return stopAuto("Auto-flip stopped.");
+    const b = $("#btnPlay"); b.textContent = "⏸"; b.classList.add("on"); toast("Auto-flip on. Tap ⏸ to pause.", 2200);
+    autoT = setInterval(() => {
+      if (!modal.hidden || !$("#mediaModal").hidden || speaking) return;
+      const cur = pf.getCurrentPageIndex();
+      if (visible(cur).includes(N - 1)) return stopAuto("You reached the end 🎉");
+      if (gate(portrait() ? cur + 1 : cur + (cur === 0 ? 1 : 2))) return stopAuto("Auto-flip paused at your checkpoint.");
+      pf.flipNext();
+    }, 6000);
+  };
+
+  /* ---------------- share link ---------------- */
+  $("#btnShare").onclick = async () => {
+    const p = visible(pf.getCurrentPageIndex())[0] + 1;
+    const url = location.href.split("#")[0] + "#p=" + p;
+    try { if (navigator.share) { await navigator.share({ title: CFG.title, text: "Smart MUET Guide, page " + p, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+    try { await navigator.clipboard.writeText(url); toast("🔗 Link to page " + p + " copied."); } catch (e) { prompt("Copy this link:", url); }
+  };
+
+  /* ---------------- search ---------------- */
+  const KEYS = [
+    ["PREP", "Speaking technique: Point, Reason, Example, Point", 24], ["PEEL", "Writing technique: Point, Evidence, Explain, Link", 38],
+    ["SCAN", "Reading technique for finding answers fast", 31], ["CLUE", "Listening technique", 17],
+    ["Band", "How MUET bands and scores work", 8], ["Exam slip", "Check your MUET exam slip online", 13], ["Results", "Check your MUET result", 13],
+    ["Registration", "How to register for MUET", 13], ["Fees", "MUET test fees (kadar bayaran)", 13], ["Calendar", "MUET 2027 calendar and dates", 12],
+    ["Validity", "How long your MUET result is valid", 5], ["CEFR", "Score and CEFR level", 51]
+  ];
+  function searchIndex() {
+    const out = [];
+    KEYS.forEach(k => out.push({ t: k[0], d: k[1], p: k[2], hay: (k[0] + " " + k[1]).toLowerCase() }));
+    UNITS.forEach(u => out.push({ t: `Unit ${u.id} · ${u.title}`, d: `Pages ${u.from}–${u.end}`, p: u.from, hay: (u.title + " unit " + u.id).toLowerCase() }));
+    return out;
+  }
+  function doSearch(q) {
+    q = q.trim().toLowerCase(); const box = $("#sRes"); box.textContent = "";
+    const num = parseInt(q, 10);
+    let res = [];
+    if (q && !isNaN(num) && num >= 1 && num <= N) res.push({ t: "Go to page " + num, d: "Jump straight there", p: num });
+    if (q) res = res.concat(searchIndex().filter(x => x.hay.includes(q)));
+    if (q) UNITS.forEach(u => {
+      const pool = [].concat(u.mcq.map(x => x.q), u.tf.map(x => x.q), u.fill.map(x => x.q), u.match.pairs.map(x => x[0] + " " + x[1]));
+      const hit = pool.find(x => x.toLowerCase().includes(q));
+      if (hit && !res.some(r => r.p === u.from && r.t.startsWith("Unit"))) res.push({ t: `Unit ${u.id} · ${u.title}`, d: "“…" + hit.slice(0, 70) + "…”", p: u.from });
+    });
+    if (!q) { box.append(h("p", { class: "empty" }, "Type a topic, a technique (PREP, PEEL, SCAN, CLUE) or a page number.")); return; }
+    if (!res.length) { box.append(h("p", { class: "empty" }, `Nothing found for “${q}”. Try a shorter word.`)); return; }
+    res.slice(0, 12).forEach(r => box.append(h("button", { class: "sr", onclick: () => { $("#search").hidden = true; goTo(r.p); } }, h("b", {}, r.t), h("small", {}, r.d), h("span", {}, "p. " + r.p))));
+  }
+  $("#btnSearch").onclick = () => { $("#search").hidden = false; $("#sInput").value = ""; doSearch(""); setTimeout(() => $("#sInput").focus(), 50); };
+  $("#sClose").onclick = () => ($("#search").hidden = true);
+  $("#search").addEventListener("click", e => { if (e.target.id === "search") $("#search").hidden = true; });
+  $("#sInput").addEventListener("input", e => doSearch(e.target.value));
+
+  /* ---------------- confetti + chimes ---------------- */
+  function confetti(n = 90) {
+    const box = $("#confetti"), cols = ["#FF751F", "#FFD919", "#3542E8", "#00A88E", "#C80DA0", "#fff"];
+    for (let i = 0; i < n; i++) {
+      const p = h("i", {}); const sz = 6 + Math.random() * 8;
+      p.style.cssText = `left:${Math.random() * 100}%;width:${sz}px;height:${sz * 1.6}px;background:${pick(cols)};animation-duration:${1.8 + Math.random() * 1.8}s;animation-delay:${Math.random() * .5}s;transform:rotate(${Math.random() * 360}deg)`;
+      box.append(p); setTimeout(() => p.remove(), 4200);
+    }
+  }
+  function tone(freqs, dur = 0.14) {
+    if (!state.sound) return;
+    try {
+      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      freqs.forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = "sine"; o.frequency.value = f;
+        const t = ac.currentTime + i * dur; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.1);
+        o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur + 0.12); });
+    } catch (e) {}
+  }
+  const chimeOk = () => { tone([660, 880]); try { navigator.vibrate && navigator.vibrate(15); } catch (e) {} };
+  const chimeBad = () => { tone([300, 240], 0.12); try { navigator.vibrate && navigator.vibrate([20, 40, 20]); } catch (e) {} };
+  const chimeWin = () => tone([523, 659, 784, 1047], 0.13);
+
+  /* ---------------- certificate ---------------- */
+  function certificate() {
+    const c = document.createElement("canvas"); c.width = 1754; c.height = 1240; const g = c.getContext("2d");
+    const grd = g.createLinearGradient(0, 0, 0, 1240); grd.addColorStop(0, "#3542E8"); grd.addColorStop(1, "#1d2160"); g.fillStyle = grd; g.fillRect(0, 0, 1754, 1240);
+    g.fillStyle = "#fff"; g.beginPath(); g.roundRect(70, 70, 1614, 1100, 36); g.fill();
+    g.strokeStyle = "#FF751F"; g.lineWidth = 8; g.beginPath(); g.roundRect(100, 100, 1554, 1040, 24); g.stroke();
+    g.textAlign = "center"; g.fillStyle = "#17151E";
+    g.font = "800 30px Arial"; g.fillText("SMART MUET GUIDE · BAND UP! 2027", 877, 210);
+    g.font = "900 96px Arial"; g.fillStyle = "#3542E8"; g.fillText("Certificate of Completion", 877, 360);
+    g.fillStyle = "#5E5868"; g.font = "400 36px Arial"; g.fillText("This certifies that", 877, 470);
+    g.fillStyle = "#17151E"; g.font = "900 120px Arial";
+    let nameTxt = nm() || "Smart MUET Learner"; let fs = 120; while (g.measureText(nameTxt).width > 1300 && fs > 50) { fs -= 6; g.font = `900 ${fs}px Arial`; }
+    g.fillText(nameTxt, 877, 620);
+    g.fillStyle = "#FF751F"; g.fillRect(527, 660, 700, 6);
+    const tot = UNITS.reduce((a, u) => [a[0] + (unitScore(u) ? unitScore(u).score : 0), a[1] + (unitScore(u) ? unitScore(u).total : 0)], [0, 0]);
+    g.fillStyle = "#17151E"; g.font = "400 38px Arial";
+    g.fillText(`has completed all ${UNITS.length} units and checkpoints of the interactive eBook`, 877, 760);
+    g.fillText(`with an overall best score of ${tot[0]} / ${tot[1]} (${Math.round(tot[0] / (tot[1] || 1) * 100)}%)` + (state.goal ? ` · target ${state.goal}` : ""), 877, 820);
+    g.font = "400 30px Arial"; g.fillStyle = "#5E5868";
+    g.fillText(new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }), 877, 930);
+    g.fillText("English Language Unit, Jabatan Pengajian Am · Politeknik Port Dickson", 877, 1020);
+    g.font = "800 28px Arial"; g.fillStyle = "#3542E8"; g.fillText("Keep practising. You are ready to band up!", 877, 1085);
+    const a = document.createElement("a"); a.download = "Smart_MUET_Certificate" + (nm() ? "_" + nm().replace(/\W+/g, "_") : "") + ".png"; a.href = c.toDataURL("image/png"); document.body.append(a); a.click(); a.remove();
+    toast("🎓 Certificate saved to your downloads.");
+  }
+  $("#btnCert").onclick = certificate;
+  $("#btnName").onclick = () => { closeDrawer(); showWelcome(true); };
+
+  /* ---------------- welcome (personal touch) ---------------- */
+  let wGoal = state.goal || "";
+  function paintGreet() { $("#greet").textContent = nm() ? `Hi ${nm()} 👋 · Band Up! 2027` : "Band Up! 2027 · Interactive eBook"; }
+  function showWelcome(edit) {
+    $("#welcome").hidden = false; $("#wName").value = nm(); wGoal = state.goal || "";
+    $$("#wGoal button").forEach(b => b.classList.toggle("on", b.dataset.g === wGoal));
+    $("#wGo").textContent = edit ? "Save ›" : "Open the book ›"; setTimeout(() => $("#wName").focus(), 300);
+  }
+  $$("#wGoal button").forEach(b => b.onclick = () => { wGoal = wGoal === b.dataset.g ? "" : b.dataset.g; $$("#wGoal button").forEach(x => x.classList.toggle("on", x.dataset.g === wGoal)); });
+  function closeWelcome(save_) {
+    if (save_) { state.name = $("#wName").value.trim(); state.goal = wGoal; } else state.skipped = true;
+    save(); $("#welcome").hidden = true; paintGreet(); refresh();
+    if (save_ && nm()) { toast(`Hello ${nm()}! Let’s get you to ${state.goal || "your best band"} 💪`, 3600); confetti(40); }
+  }
+  $("#wGo").onclick = () => closeWelcome(true);
+  $("#wSkip").onclick = () => closeWelcome(false);
+  $("#wName").addEventListener("keydown", e => { if (e.key === "Enter") closeWelcome(true); });
 
   /* ---------------- header buttons ---------------- */
   $("#btnLinks").onclick = e => { document.body.classList.toggle("show-hots"); e.currentTarget.classList.toggle("on"); };
@@ -395,11 +589,11 @@
       st.order[qi].forEach((o, oi) => {
         const picked = st.picked[qi] !== undefined, isPick = st.picked[qi] === o.i, isAns = o.i === q.answer;
         box.append(h("button", { class: "opt" + (picked ? (isAns ? " ok" : isPick ? " bad" : "") : ""), disabled: picked,
-          onclick: () => { st.picked[qi] = o.i; if (st.picked.filter(x => x !== undefined).length === u.mcq.length) { st.done = true; recordPartial(); } renderSheet(); } },
+          onclick: () => { st.picked[qi] = o.i; (o.i === q.answer ? chimeOk : chimeBad)(); if (st.picked.filter(x => x !== undefined).length === u.mcq.length) { st.done = true; recordPartial(); } renderSheet(); } },
           h("b", {}, "ABCDEF"[oi]), o.t));
       });
       card.append(box);
-      if (st.picked[qi] !== undefined) card.append(h("div", { class: "why " + (st.picked[qi] === q.answer ? "ok" : "bad") }, (st.picked[qi] === q.answer ? "✔ Correct. " : "✖ Not quite. ") + q.why));
+      if (st.picked[qi] !== undefined) card.append(h("div", { class: "why " + (st.picked[qi] === q.answer ? "ok" : "bad") }, (st.picked[qi] === q.answer ? pick(["✔ Mantap! ", "✔ Spot on! ", "✔ Well done! ", "✔ Nice one! "]) : pick(["✖ Almost! ", "✖ Not quite. ", "✖ Good try. "])) + q.why));
       body.append(card);
     });
     footer(foot, "mcq");
@@ -413,9 +607,9 @@
       const card = h("div", { class: "q" }, h("div", { class: "qt" }, h("i", {}, (qi + 1) + "."), q.q));
       const row = h("div", { class: "tfrow" });
       [true, false].forEach(v => row.append(h("button", { class: "opt" + (answered ? (v === q.answer ? " ok" : p === v ? " bad" : "") : ""), disabled: answered,
-        onclick: () => { st.picked[qi] = v; if (st.picked.filter(x => x !== undefined).length === u.tf.length) { st.done = true; recordPartial(); } renderSheet(); } }, v ? "👍 True" : "👎 False")));
+        onclick: () => { st.picked[qi] = v; (v === q.answer ? chimeOk : chimeBad)(); if (st.picked.filter(x => x !== undefined).length === u.tf.length) { st.done = true; recordPartial(); } renderSheet(); } }, v ? "👍 True" : "👎 False")));
       card.append(row);
-      if (answered) card.append(h("div", { class: "why " + (p === q.answer ? "ok" : "bad") }, (p === q.answer ? "✔ Correct. " : "✖ Not quite. ") + q.why));
+      if (answered) card.append(h("div", { class: "why " + (p === q.answer ? "ok" : "bad") }, (p === q.answer ? pick(["✔ Mantap! ", "✔ Spot on! ", "✔ Well done! "]) : pick(["✖ Almost! ", "✖ Good try. "])) + q.why));
       body.append(card);
     });
     footer(foot, "tf");
@@ -493,13 +687,16 @@
       if (!prev || x / y >= prev.score / prev.total) state.units[u.id] = { complete: true, best: { score: x, total: y } };
       else state.units[u.id].complete = true;
       save(); refresh();
-      if (!wasDone && state.units[u.id].complete) setTimeout(() => toast(`🎉 Unit ${u.id} complete! Keep turning pages.`), 300);
+      if (!wasDone && state.units[u.id].complete) setTimeout(() => toast(`🎉 Unit ${u.id} complete${you(", ")}! Keep turning pages.`), 300);
+      if (p >= 70) { confetti(p >= 90 ? 140 : 80); chimeWin(); } else tone([440, 523], 0.12);
+      if (UNITS.every(isComplete)) setTimeout(() => toast(`🏆 ${you("", ", ")}you finished the whole guide! Your certificate is under Contents.`, 5000), 1400);
     }
     const [m, mt] = medal(p);
     body.append(h("div", { class: "result" },
       h("div", { class: "medal" }, pass ? m : "🔁"),
-      h("h3", {}, pass ? `${mt} ${x} / ${y} (${p}%)` : `${x} / ${y} (${p}%) — you need ${CFG.PASS_PERCENT}% to unlock the next unit`),
+      h("h3", {}, pass ? `${you("", ", ")}${p >= 90 ? "you nailed it" : p >= 70 ? "great job" : p >= 50 ? "good effort" : "nice try"}! ${mt} ${x} / ${y} (${p}%)` : `${x} / ${y} (${p}%) — you need ${CFG.PASS_PERCENT}% to unlock the next unit`),
       h("div", { class: "bk" }, STEPS.map(s => { const [a, b] = scoreOf(s.key); return h("div", {}, h("span", {}, s.icon + " " + s.label), h("span", {}, a + " / " + b)); })),
+      UNITS.every(isComplete) ? h("button", { class: "btn go", style: "margin:6px auto 4px", onclick: certificate }, "🎓 Download my certificate") : null,
       h("p", { class: "note" }, pass ? "Your best score is saved on this device. You can retry any time to improve it." : "Try again, and read the unit pages first if you need to.")));
     foot.append(
       h("button", { class: "btn alt", onclick: () => { openUnit(u, true); } }, "↻ Try again"),
@@ -508,9 +705,18 @@
   }
 
   /* ---------------- start ---------------- */
-  refresh();
-  if (!state.hinted) { const hint = $("#hint"); hint.hidden = false; setTimeout(() => { hint.hidden = true; state.hinted = true; save(); }, 6500); }
-  else if (state.last > 0) toast(`Welcome back! Continuing from ${pageLabel(state.last).toLowerCase()}.`, 3000);
+  function bumpStreak() {
+    const today = new Date().toISOString().slice(0, 10), y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+    if (state.streak.day === today) return state.streak.n;
+    state.streak = { day: today, n: state.streak.day === y ? state.streak.n + 1 : 1 }; save(); return state.streak.n;
+  }
+  paintGreet(); refresh(); setZoom(1);
+  const streak = bumpStreak();
+  if (!state.name && !state.skipped) showWelcome(false);
+  else if (!state.hinted) { const hint = $("#hint"); hint.hidden = false; setTimeout(() => { hint.hidden = true; state.hinted = true; save(); }, 6500); }
+  else if (state.last > 0) toast(`Welcome back${you(", ")}! Continuing from ${pageLabel(state.last).toLowerCase()}.` + (streak > 1 ? ` 🔥 ${streak}-day streak` : ""), 3600);
+  if (state.name && !state.hinted) { state.hinted = true; save(); }
   window.addEventListener("resize", () => setTimeout(refresh, 300));
-  window.SmartMuetBook = { goTo, openUnit: id => openUnit(UNITS.find(u => u.id === id)), pf };
+  if (location.hash && /p=\d+/.test(location.hash)) setTimeout(() => goTo(+/p=(\d+)/.exec(location.hash)[1], { jump: true }), 400);
+  window.SmartMuetBook = { goTo, openUnit: id => openUnit(UNITS.find(u => u.id === id)), pf, setZoom };
 })();

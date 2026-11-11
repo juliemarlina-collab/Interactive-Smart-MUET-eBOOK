@@ -32,3 +32,8 @@ Edit `BOOK_MEDIA` in `activities.js`. Types: `tts` (device voice), `audio` (mp3)
 
 ## If the eBook changes
 Export the pages again as JPG, name them `p-01.jpg` … and replace the files in `pages/`.
+
+## v2 additions
+Welcome screen with name + target band, greeting and streak, page-number box, thumbnail strip (🏁 = checkpoint, 🔒 = locked),
+zoom, auto-flip, bookmarks (☆), share link (#p=NN), search, chapter cards with scores, confetti + sounds,
+and a downloadable certificate after all 8 units. Upload everything, including the new `pages/t/` thumbnails folder.
