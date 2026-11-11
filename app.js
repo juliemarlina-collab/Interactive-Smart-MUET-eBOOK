@@ -23,6 +23,7 @@
     c.flat().forEach(x => { if (x != null && x !== false) e.append(x.nodeType ? x : document.createTextNode(x)); });
     return e;
   };
+  const mi = (name, cls) => h("img", { class: "mot " + (cls || ""), src: "assets/ic-" + name + ".webp", alt: "", width: 56, height: 56, draggable: "false" });
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
   /* ---------------- saved progress ---------------- */
@@ -36,7 +37,7 @@
   const nm = () => (state.name || "").trim();
   const you = (pre = "", post = "") => nm() ? pre + nm() + post : "";
   const pick = a => a[Math.floor(Math.random() * a.length)];
-  const thumbSrc = n => "pages/t/t-" + pad(n) + ".jpg";
+  const thumbSrc = n => "pages/t/t-" + pad(n) + ".webp";
   const unitOfPage = p => UNITS.find(u => p >= u.from && p <= u.end);
 
   /* ---------------- toast ---------------- */
@@ -179,7 +180,7 @@
     const u = UNITS.find(x => v.includes(x.end - 1)), cp = $("#cpBtn");
     if (u) {
       cp.hidden = false; cp.classList.toggle("done", isComplete(u));
-      cp.textContent = isComplete(u) ? `✔ Unit ${u.id} checkpoint done · Review` : `${u.icon} Start Unit ${u.id} checkpoint`;
+      cp.textContent = ""; cp.append(mi(isComplete(u) ? "trophy" : "check", isComplete(u) ? "pop" : "wob"), isComplete(u) ? `Unit ${u.id} checkpoint done · Review` : `Start Unit ${u.id} checkpoint`);
       cp.onclick = () => openUnit(u);
     } else cp.hidden = true;
     renderToc(); markThumbs(cur);
@@ -720,7 +721,7 @@
     }
     const [m, mt] = medal(p);
     body.append(h("div", { class: "result" },
-      h("div", { class: "medal" }, pass ? m : "🔁"),
+      h("div", { class: "medal" }, pass ? mi("trophy", "pop big") : "🔁"),
       h("h3", {}, pass ? `${you("", ", ")}${p >= 90 ? "you nailed it" : p >= 70 ? "great job" : p >= 50 ? "good effort" : "nice try"}! ${mt} ${x} / ${y} (${p}%)` : `${you("", ", ")}${p >= 40 ? "so close" : "not yet"}! ${x} / ${y} (${p}%). You need ${CFG.PASS_PERCENT}% to unlock the next unit.`),
       h("div", { class: "bk" }, STEPS.map(s => { const [a, b] = scoreOf(s.key); return h("div", {}, h("span", {}, s.icon + " " + s.label), h("span", {}, a + " / " + b)); })),
       UNITS.every(isComplete) ? h("button", { class: "btn go", style: "margin:6px auto 4px", onclick: certificate }, "🎓 Download my certificate") : null,
@@ -750,7 +751,7 @@
     MINIS.filter(m => v.includes(m.page)).forEach(m => {
       const done = state.mini[m.id] && state.mini[m.id].done;
       const b = h("button", { class: "mcard" + (done ? " done" : ""), type: "button", style: "--mc:" + m.color, onclick: () => openMini(m) },
-        h("span", { class: "mic" }, done ? "✓" : "▶"),
+        h("span", { class: "mic" }, mi(done ? "trophy" : (m.type === "self" ? "check" : /^(scan|s53|s54|clue2)$/.test(m.id) ? "scan" : "puzzle"), done ? "pop" : "wig")),
         h("span", { class: "mtx" }, h("b", {}, (done ? "Done " : "Play ") + (CARD[m.id] || m.label)), h("small", {}, done ? "Tap to review or try again" : "Tap to answer and score")));
       dock.append(b);
     });

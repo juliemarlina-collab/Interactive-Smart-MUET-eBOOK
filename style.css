@@ -17,7 +17,7 @@ button{font:inherit;cursor:pointer;border:0;color:inherit}
 .top{height:var(--top);display:flex;align-items:center;gap:14px;padding:0 14px;color:#fff;
   background:rgba(8,9,30,.55);backdrop-filter:blur(8px);flex:none;z-index:5}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
-.logo{width:34px;height:34px;border-radius:10px;background:var(--orange);display:grid;place-items:center;font-weight:900;font-size:20px;flex:none}
+.logo{width:40px;height:40px;object-fit:contain;flex:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))}
 .brand b{display:block;font-size:15px;line-height:1.1;white-space:nowrap}
 .brand small{display:block;font-size:11px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .prog{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;opacity:.95}
@@ -324,3 +324,28 @@ button{font:inherit;cursor:pointer;border:0;color:inherit}
 .mcard .mtx small{display:block;font-size:13px;font-weight:600;color:#4a4757;margin-top:2px}
 .mcard.done{border-color:#12936B;animation:none}.mcard.done .mic{background:#12936B}
 @media(max-width:720px){.mdock{left:8px;right:8px;bottom:64px;max-width:none;align-items:stretch}.mcard .mtx b{font-size:13px}.mcard .mic{width:36px;height:36px}}
+
+.wlogo{display:block;width:min(260px,70%);height:auto;margin:0 0 14px;filter:drop-shadow(0 6px 14px rgba(0,0,0,.35))}
+@media(max-width:640px){.wlogo{margin:0 auto 10px;width:200px}}
+
+/* motion icons */
+.mot{display:inline-block;width:1.4em;height:1.4em;object-fit:contain;vertical-align:middle;margin-right:8px;transform-origin:50% 80%;-webkit-user-drag:none;user-select:none}
+.mot.big{width:96px;height:96px;margin:0}
+.mot.wig{animation:wig 3.2s ease-in-out infinite}
+.mot.wob{animation:wob 2.4s ease-in-out infinite}
+.mot.pop{animation:popin .7s cubic-bezier(.2,1.6,.4,1) both,shine 3.5s 1s ease-in-out infinite}
+@keyframes wig{0%,70%,100%{transform:rotate(0) scale(1)}76%{transform:rotate(-12deg) scale(1.08)}82%{transform:rotate(10deg) scale(1.08)}88%{transform:rotate(-6deg)}94%{transform:rotate(3deg)}}
+@keyframes wob{0%,60%,100%{transform:translateY(0) rotate(0)}70%{transform:translateY(-4px) rotate(-8deg)}80%{transform:translateY(0) rotate(7deg)}90%{transform:rotate(-3deg)}}
+@keyframes popin{0%{transform:scale(.2) rotate(-25deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+@keyframes shine{0%,80%,100%{filter:none}88%{filter:brightness(1.25) drop-shadow(0 0 6px #FFD34D)}}
+.mcard .mic{background:#fff;border:2px solid var(--mc,#3542E8);width:50px;height:50px;overflow:visible}
+.mcard .mic .mot{width:36px;height:36px;margin:0}
+.mcard.done .mic{border-color:#12936B;background:#E9F8F1}
+.mcard:hover .mic .mot{animation:wig .7s ease-in-out}
+.cp .mot{width:26px;height:26px;margin-right:10px;background:#fff;border-radius:7px;padding:2px}
+.btn .mot{margin-right:6px;vertical-align:-5px}
+.brand .logo{transition:transform .4s cubic-bezier(.2,1.6,.4,1)}
+.brand:hover .logo{transform:rotate(-8deg) scale(1.12)}
+.wlogo{animation:popin .8s cubic-bezier(.2,1.6,.4,1) both,floaty 4.5s 1s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@media(prefers-reduced-motion:reduce){.mot,.wlogo,.mcard{animation:none!important}}

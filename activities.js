@@ -13,7 +13,7 @@
 window.BOOK_CONFIG = {
   title: "Smart MUET Guide · Band Up! 2027",
   totalPages: 53,
-  pagePattern: "pages/p-{nn}.jpg",
+  pagePattern: "pages/p-{nn}.webp",
   REQUIRE_COMPLETE: true,   // true  = readers must finish a unit's checkpoint before going on
                             // false = checkpoint is optional (they can skip)
   PASS_PERCENT: 60,         // % needed to unlock the next unit (0 = finishing is enough)

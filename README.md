@@ -15,7 +15,7 @@ Open `index.html` through any web server (GitHub Pages works). Double-clicking t
 | `app.js` | flipbook, links, audio/video, activities, saved progress |
 | `activities.js` | **all questions + settings (edit this one)** |
 | `links.js` | clickable link areas on each page (taken from the eBook) |
-| `pages/p-01.jpg … p-53.jpg` | the eBook pages |
+| `pages/p-01.webp … p-53.webp` | the eBook pages |
 | `lib/page-flip.browser.js` | page-turn engine (StPageFlip, MIT licence) |
 
 ## Settings (top of `activities.js`)
@@ -31,7 +31,7 @@ Edit `BOOK_MEDIA` in `activities.js`. Types: `tts` (device voice), `audio` (mp3)
 `x, y, w, h` are percentages of the page. Put your files in a `media/` folder.
 
 ## If the eBook changes
-Export the pages again as JPG, name them `p-01.jpg` … and replace the files in `pages/`.
+Export the pages again as WebP (or JPG, then convert), name them `p-01.webp` … and replace the files in `pages/`.
 
 ## v2 additions
 Welcome screen with name + target band, greeting and streak, page-number box, thumbnail strip (🏁 = checkpoint, 🔒 = locked),
